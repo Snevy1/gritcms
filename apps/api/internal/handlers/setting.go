@@ -240,7 +240,7 @@ func (h *SettingHandler) SeedDefaults(c *gin.Context) {
 	if pageCount == 0 {
 		now := time.Now()
 		homeSections := `[
-			{"sectionId":"header-003","props":{"logo":"{{site_name}}","links":"Home, Courses, Products, Blog, Community, Book a Call, Contact"}},
+			{"sectionId":"header-003","props":{"logo":"{{site_name}}","links":[{"label":"Home","url":"/"},{"label":"Courses","url":"/courses"},{"label":"Products","url":"/products"},{"label":"Blog","url":"/blog"},{"label":"Community","url":"/community"},{"label":"Book a Call","url":"/booking"},{"label":"Contact","url":"/contact"}]}},
 			{"sectionId":"hero-002","props":{"heading":"Hey Friends 👋","subheading":"Welcome to my corner of the internet. I'm a creator, educator, and entrepreneur sharing ideas on productivity, creativity, and building a life you love.","primaryCta":"Subscribe to Newsletter","secondaryCta":"Explore Courses"}},
 			{"sectionId":"live-010","props":{"heading":"Connect With Me"}},
 			{"sectionId":"features-003","props":{"heading":"How Can I Help You?","subheading":"I create content, courses, and products to help you level up.","feature1Title":"Grow Your Audience","feature1Desc":"Learn strategies to build and engage your audience across platforms.","feature2Title":"Be More Productive","feature2Desc":"Science-backed productivity tips and systems to get more done.","feature3Title":"Build Your Business","feature3Desc":"Step-by-step guides to monetize your skills and build online income."}},

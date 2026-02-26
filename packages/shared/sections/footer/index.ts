@@ -3,6 +3,18 @@ import React from "react";
 import { registerSections } from "../registry";
 import type { SectionDefinition } from "../types";
 
+/** Safely parse links prop — handles both array and comma-separated string formats */
+function parseLinks(raw: unknown): Array<{ label: string; url: string }> {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string" && raw.trim()) {
+    return raw.split(",").map((s) => {
+      const label = s.trim();
+      return { label, url: "/" + label.toLowerCase().replace(/\s+/g, "-") };
+    });
+  }
+  return [];
+}
+
 /* ------------------------------------------------------------------ */
 /*  footer-001  Four Column                                           */
 /* ------------------------------------------------------------------ */
@@ -423,7 +435,7 @@ const footer004: SectionDefinition = {
   ],
   component: (props: Record<string, unknown>) => {
     const logo = (props.logo as string) || "GritCMS";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
     const copyright = (props.copyright as string) || "";
 
     return React.createElement(
@@ -472,7 +484,7 @@ const footer005: SectionDefinition = {
   ],
   component: (props: Record<string, unknown>) => {
     const copyright = (props.copyright as string) || "";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
 
     return React.createElement(
       "footer",
@@ -636,7 +648,7 @@ const footer007: SectionDefinition = {
     const newsletterPlaceholder = (props.newsletterPlaceholder as string) || "Enter your email";
     const newsletterButton = (props.newsletterButton as string) || "Subscribe";
     const copyright = (props.copyright as string) || "";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
 
     return React.createElement(
       "footer",
@@ -857,7 +869,7 @@ const footer009: SectionDefinition = {
     const logo = (props.logo as string) || "GritCMS";
     const copyright = (props.copyright as string) || "";
     const socialLinks = (props.socialLinks as Array<{ platform: string; url: string }>) || [];
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
 
     return React.createElement(
       "footer",
@@ -931,7 +943,7 @@ const footer010: SectionDefinition = {
     const appStoreUrl = (props.appStoreUrl as string) || "#";
     const googlePlayUrl = (props.googlePlayUrl as string) || "#";
     const copyright = (props.copyright as string) || "";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
 
     return React.createElement(
       "footer",
@@ -1135,7 +1147,7 @@ const footer012: SectionDefinition = {
     const logoImage = (props.logoImage as string) || "";
     const tagline = (props.tagline as string) || "";
     const copyright = (props.copyright as string) || "";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
 
     return React.createElement(
       "footer",
@@ -1296,7 +1308,7 @@ const footer014: SectionDefinition = {
   component: (props: Record<string, unknown>) => {
     const logo = (props.logo as string) || "GritCMS";
     const copyright = (props.copyright as string) || "";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
 
     return React.createElement(
       "footer",
@@ -1359,7 +1371,7 @@ const footer015: SectionDefinition = {
     const phone = (props.phone as string) || "";
     const email = (props.email as string) || "";
     const copyright = (props.copyright as string) || "";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
 
     return React.createElement(
       "footer",

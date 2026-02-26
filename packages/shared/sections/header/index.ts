@@ -3,6 +3,18 @@ import React from "react";
 import { registerSections } from "../registry";
 import type { SectionDefinition } from "../types";
 
+/** Safely parse links prop — handles both array and comma-separated string formats */
+function parseLinks(raw: unknown): Array<{ label: string; url: string }> {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string" && raw.trim()) {
+    return raw.split(",").map((s) => {
+      const label = s.trim();
+      return { label, url: "/" + label.toLowerCase().replace(/\s+/g, "-") };
+    });
+  }
+  return [];
+}
+
 /* ------------------------------------------------------------------ */
 /*  header-001  Transparent                                           */
 /* ------------------------------------------------------------------ */
@@ -35,7 +47,7 @@ const header001: SectionDefinition = {
   ],
   component: (props: Record<string, unknown>) => {
     const logo = (props.logo as string) || "GritCMS";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
     const ctaText = (props.ctaText as string) || "";
     const ctaUrl = (props.ctaUrl as string) || "/signup";
 
@@ -120,7 +132,7 @@ const header002: SectionDefinition = {
   ],
   component: (props: Record<string, unknown>) => {
     const logo = (props.logo as string) || "GritCMS";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
     const ctaText = (props.ctaText as string) || "";
     const ctaUrl = (props.ctaUrl as string) || "/signup";
 
@@ -201,7 +213,7 @@ const header003: SectionDefinition = {
   ],
   component: (props: Record<string, unknown>) => {
     const logo = (props.logo as string) || "GritCMS";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
     const ctaText = (props.ctaText as string) || "";
     const ctaUrl = (props.ctaUrl as string) || "/signup";
 
@@ -292,7 +304,7 @@ const header004: SectionDefinition = {
   ],
   component: (props: Record<string, unknown>) => {
     const logo = (props.logo as string) || "GritCMS";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
     const ctaText = (props.ctaText as string) || "";
     const ctaUrl = (props.ctaUrl as string) || "/signup";
     const megaItems = (props.megaItems as Array<{ title: string; description: string; url: string }>) || [];
@@ -408,7 +420,7 @@ const header005: SectionDefinition = {
   ],
   component: (props: Record<string, unknown>) => {
     const logo = (props.logo as string) || "GritCMS";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
     const ctaText = (props.ctaText as string) || "";
     const ctaUrl = (props.ctaUrl as string) || "/signup";
 
@@ -498,8 +510,8 @@ const header006: SectionDefinition = {
   ],
   component: (props: Record<string, unknown>) => {
     const logo = (props.logo as string) || "GritCMS";
-    const leftLinks = (props.leftLinks as Array<{ label: string; url: string }>) || [];
-    const rightLinks = (props.rightLinks as Array<{ label: string; url: string }>) || [];
+    const leftLinks = parseLinks(props.leftLinks);
+    const rightLinks = parseLinks(props.rightLinks);
 
     return React.createElement(
       "header",
@@ -592,7 +604,7 @@ const header007: SectionDefinition = {
     const topbarLinkText = (props.topbarLinkText as string) || "";
     const topbarLinkUrl = (props.topbarLinkUrl as string) || "#";
     const logo = (props.logo as string) || "GritCMS";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
     const ctaText = (props.ctaText as string) || "";
     const ctaUrl = (props.ctaUrl as string) || "/signup";
 
@@ -699,7 +711,7 @@ const header008: SectionDefinition = {
   ],
   component: (props: Record<string, unknown>) => {
     const logo = (props.logo as string) || "GritCMS";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
     const loginText = (props.loginText as string) || "Log in";
     const loginUrl = (props.loginUrl as string) || "/login";
     const ctaText = (props.ctaText as string) || "Start Free Trial";
@@ -781,7 +793,7 @@ const header009: SectionDefinition = {
   ],
   component: (props: Record<string, unknown>) => {
     const logo = (props.logo as string) || "GritCMS";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
 
     return React.createElement(
       "header",
@@ -846,7 +858,7 @@ const header010: SectionDefinition = {
   ],
   component: (props: Record<string, unknown>) => {
     const logo = (props.logo as string) || "GritCMS";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
     const ctaText = (props.ctaText as string) || "";
     const ctaUrl = (props.ctaUrl as string) || "/signup";
 
@@ -933,7 +945,7 @@ const header011: SectionDefinition = {
     const tagline = (props.tagline as string) || "";
     const phone = (props.phone as string) || "";
     const email = (props.email as string) || "";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
 
     return React.createElement(
       "header",
@@ -1054,7 +1066,7 @@ const header012: SectionDefinition = {
   ],
   component: (props: Record<string, unknown>) => {
     const logo = (props.logo as string) || "GritCMS";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
     const ctaText = (props.ctaText as string) || "";
     const ctaUrl = (props.ctaUrl as string) || "/signup";
 
@@ -1136,7 +1148,7 @@ const header013: SectionDefinition = {
   ],
   component: (props: Record<string, unknown>) => {
     const logo = (props.logo as string) || "GritCMS";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
     const searchPlaceholder = (props.searchPlaceholder as string) || "Search...";
     const ctaText = (props.ctaText as string) || "";
     const ctaUrl = (props.ctaUrl as string) || "/signup";
@@ -1237,7 +1249,7 @@ const header014: SectionDefinition = {
   ],
   component: (props: Record<string, unknown>) => {
     const logo = (props.logo as string) || "GritCMS";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
     const ctaText = (props.ctaText as string) || "";
     const ctaUrl = (props.ctaUrl as string) || "/signup";
 
@@ -1318,7 +1330,7 @@ const header015: SectionDefinition = {
   ],
   component: (props: Record<string, unknown>) => {
     const logo = (props.logo as string) || "GritCMS";
-    const links = (props.links as Array<{ label: string; url: string }>) || [];
+    const links = parseLinks(props.links);
     const ctaText = (props.ctaText as string) || "";
     const ctaUrl = (props.ctaUrl as string) || "/signup";
 

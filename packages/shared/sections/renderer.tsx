@@ -4,6 +4,33 @@ import React from "react";
 import { getSection } from "./registry";
 import type { PageSection } from "./types";
 
+/** Error boundary that catches render errors in individual sections */
+class SectionErrorBoundary extends React.Component<
+  { sectionId: string; children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { sectionId: string; children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: Error) {
+    console.error(`Section "${this.props.sectionId}" crashed:`, error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="py-8 text-center text-slate-400">
+          <p className="text-sm">This section failed to render.</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 interface SectionRendererProps {
   sectionId: string;
   props: Record<string, unknown>;
@@ -38,7 +65,9 @@ export function SectionRenderer({
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
     >
-      <Component {...mergedProps} />
+      <SectionErrorBoundary sectionId={sectionId}>
+        <Component {...mergedProps} />
+      </SectionErrorBoundary>
     </div>
   );
 }
