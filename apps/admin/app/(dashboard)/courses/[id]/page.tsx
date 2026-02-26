@@ -23,6 +23,7 @@ import {
   Users,
   X,
 } from "@/lib/icons";
+import { Dropzone, type UploadedFile } from "@/components/ui/dropzone";
 import {
   useCourse,
   useUpdateCourse,
@@ -519,24 +520,16 @@ export default function CourseEditorPage() {
               </div>
 
               <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-text-secondary mb-1">Thumbnail URL</label>
-                <input
-                  type="text"
-                  value={thumbnail}
-                  onChange={(e) => setThumbnail(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+                <label className="block text-sm font-medium text-text-secondary mb-1">Thumbnail</label>
+                <Dropzone
+                  variant="default"
+                  maxFiles={1}
+                  maxSize={5 * 1024 * 1024}
+                  accept={{ "image/*": [".jpg", ".jpeg", ".png", ".gif", ".webp"] }}
+                  value={thumbnail ? [{ url: thumbnail, name: "thumbnail", size: 0, type: "image/jpeg" } as UploadedFile] : []}
+                  onFilesChange={(files) => setThumbnail(files[0]?.url || "")}
+                  description="Upload a course thumbnail image (max 5MB)"
                 />
-                {thumbnail && (
-                  <div className="mt-3">
-                    <img
-                      src={thumbnail}
-                      alt="Thumbnail preview"
-                      className="h-32 w-auto rounded-lg border border-border object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                    />
-                  </div>
-                )}
               </div>
 
               <div>
@@ -920,13 +913,15 @@ export default function CourseEditorPage() {
               {editingLessonId && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-text-secondary mb-1">Video URL</label>
-                    <input
-                      type="text"
-                      value={lessonForm.video_url}
-                      onChange={(e) => setLessonForm({ ...lessonForm, video_url: e.target.value })}
-                      placeholder="https://..."
-                      className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+                    <label className="block text-sm font-medium text-text-secondary mb-1">Video</label>
+                    <Dropzone
+                      variant="compact"
+                      maxFiles={1}
+                      maxSize={100 * 1024 * 1024}
+                      accept={{ "video/*": [".mp4", ".webm", ".mov"] }}
+                      value={lessonForm.video_url ? [{ url: lessonForm.video_url, name: "video", size: 0, type: "video/mp4" } as UploadedFile] : []}
+                      onFilesChange={(files) => setLessonForm({ ...lessonForm, video_url: files[0]?.url || "" })}
+                      description="Upload lesson video (max 100MB)"
                     />
                   </div>
 

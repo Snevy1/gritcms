@@ -22,7 +22,7 @@ type EmailList struct {
 	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
 
 	Subscriptions  []EmailSubscription `gorm:"foreignKey:EmailListID" json:"subscriptions,omitempty"`
-	WelcomeEmail   *EmailTemplate      `gorm:"foreignKey:ID;references:WelcomeEmailID" json:"welcome_email,omitempty"`
+	WelcomeEmail   *EmailTemplate      `gorm:"foreignKey:WelcomeEmailID" json:"welcome_email,omitempty"`
 	SubscriberCount int64              `gorm:"-" json:"subscriber_count,omitempty"`
 }
 

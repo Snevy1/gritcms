@@ -9,7 +9,6 @@ import (
 	"github.com/MUKE-coder/gin-docs/gindocs"
 	"github.com/MUKE-coder/gorm-studio/studio"
 	"github.com/MUKE-coder/pulse/pulse"
-	"github.com/MUKE-coder/sentinel"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
@@ -17,10 +16,10 @@ import (
 	"gritcms/apps/api/internal/cache"
 	"gritcms/apps/api/internal/config"
 	"gritcms/apps/api/internal/handlers"
+	"gritcms/apps/api/internal/jobs"
 	"gritcms/apps/api/internal/mail"
 	"gritcms/apps/api/internal/middleware"
 	"gritcms/apps/api/internal/models"
-	"gritcms/apps/api/internal/jobs"
 	"gritcms/apps/api/internal/services"
 	"gritcms/apps/api/internal/storage"
 )
@@ -52,38 +51,38 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 	r.MaxMultipartMemory = 10 << 20
 
 	// Mount Sentinel security suite (WAF, rate limiting, auth shield, anomaly detection)
-	if cfg.SentinelEnabled {
-		sentinel.Mount(r, db, sentinel.Config{
-			Dashboard: sentinel.DashboardConfig{
-				Username:  cfg.SentinelUsername,
-				Password:  cfg.SentinelPassword,
-				SecretKey: cfg.SentinelSecretKey,
-			},
-			WAF: sentinel.WAFConfig{
-				Enabled: true,
-				Mode:    sentinel.ModeLog, // Switch to sentinel.ModeBlock in production
-			},
-			RateLimit: sentinel.RateLimitConfig{
-				Enabled: true,
-				ByIP:    &sentinel.Limit{Requests: 100, Window: 1 * time.Minute},
-				ByRoute: map[string]sentinel.Limit{
-					"/api/auth/login":    {Requests: 5, Window: 15 * time.Minute},
-					"/api/auth/register": {Requests: 3, Window: 15 * time.Minute},
-				},
-			},
-			AuthShield: sentinel.AuthShieldConfig{
-				Enabled:    true,
-				LoginRoute: "/api/auth/login",
-			},
-			Anomaly: sentinel.AnomalyConfig{
-				Enabled: true,
-			},
-			Geo: sentinel.GeoConfig{
-				Enabled: true,
-			},
-		})
-		log.Println("Sentinel security suite mounted at /sentinel")
-	}
+	// if cfg.SentinelEnabled {
+	// 	sentinel.Mount(r, db, sentinel.Config{
+	// 		Dashboard: sentinel.DashboardConfig{
+	// 			Username:  cfg.SentinelUsername,
+	// 			Password:  cfg.SentinelPassword,
+	// 			SecretKey: cfg.SentinelSecretKey,
+	// 		},
+	// 		WAF: sentinel.WAFConfig{
+	// 			Enabled: true,
+	// 			Mode:    sentinel.ModeLog, // Switch to sentinel.ModeBlock in production
+	// 		},
+	// 		RateLimit: sentinel.RateLimitConfig{
+	// 			Enabled: true,
+	// 			ByIP:    &sentinel.Limit{Requests: 100, Window: 1 * time.Minute},
+	// 			ByRoute: map[string]sentinel.Limit{
+	// 				"/api/auth/login":    {Requests: 5, Window: 15 * time.Minute},
+	// 				"/api/auth/register": {Requests: 3, Window: 15 * time.Minute},
+	// 			},
+	// 		},
+	// 		AuthShield: sentinel.AuthShieldConfig{
+	// 			Enabled:    true,
+	// 			LoginRoute: "/api/auth/login",
+	// 		},
+	// 		Anomaly: sentinel.AnomalyConfig{
+	// 			Enabled: true,
+	// 		},
+	// 		Geo: sentinel.GeoConfig{
+	// 			Enabled: true,
+	// 		},
+	// 	})
+	// 	log.Println("Sentinel security suite mounted at /sentinel")
+	// }
 
 	// Mount GORM Studio
 	if cfg.GORMStudioEnabled {
@@ -95,7 +94,7 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 				cfg.GORMStudioUsername: cfg.GORMStudioPassword,
 			})
 		}
-		studio.Mount(r, db, []interface{}{&models.Tenant{}, &models.User{}, &models.Upload{}, &models.Blog{}, &models.Setting{}, &models.MediaAsset{}, &models.Tag{}, &models.Contact{}, &models.ContactActivity{}, &models.CustomFieldDefinition{}, &models.Page{}, &models.Post{}, &models.PostCategory{}, &models.PostTag{}, &models.Menu{}, &models.MenuItem{}, &models.EmailList{}, &models.EmailSubscription{}, &models.EmailTemplate{}, &models.EmailCampaign{}, &models.EmailSend{}, &models.EmailSequence{}, &models.EmailSequenceStep{}, &models.EmailSequenceEnrollment{}, &models.Segment{}, &models.Course{}, &models.CourseModule{}, &models.Lesson{}, &models.CourseEnrollment{}, &models.LessonProgress{}, &models.Quiz{}, &models.QuizQuestion{}, &models.QuizAttempt{}, &models.Certificate{}, &models.Product{}, &models.Price{}, &models.ProductVariant{}, &models.Coupon{}, &models.Order{}, &models.OrderItem{}, &models.Subscription{}, &models.Space{}, &models.CommunityMember{}, &models.Thread{}, &models.Reply{}, &models.Reaction{}, &models.CommunityEvent{}, &models.EventAttendee{}, &models.Funnel{}, &models.FunnelStep{}, &models.FunnelVisit{}, &models.FunnelConversion{}, &models.Calendar{}, &models.BookingEventType{}, &models.Availability{}, &models.Appointment{}, &models.AffiliateProgram{}, &models.AffiliateAccount{}, &models.AffiliateLink{}, &models.Commission{}, &models.Payout{}, &models.Workflow{}, &models.WorkflowAction{}, &models.WorkflowExecution{}, /* grit:studio */}, studioCfg)
+		studio.Mount(r, db, []interface{}{&models.Tenant{}, &models.User{}, &models.Upload{}, &models.Blog{}, &models.Setting{}, &models.MediaAsset{}, &models.Tag{}, &models.Contact{}, &models.ContactActivity{}, &models.CustomFieldDefinition{}, &models.Page{}, &models.Post{}, &models.PostCategory{}, &models.PostTag{}, &models.Menu{}, &models.MenuItem{}, &models.EmailList{}, &models.EmailSubscription{}, &models.EmailTemplate{}, &models.EmailCampaign{}, &models.EmailSend{}, &models.EmailSequence{}, &models.EmailSequenceStep{}, &models.EmailSequenceEnrollment{}, &models.Segment{}, &models.Course{}, &models.CourseModule{}, &models.Lesson{}, &models.CourseEnrollment{}, &models.LessonProgress{}, &models.Quiz{}, &models.QuizQuestion{}, &models.QuizAttempt{}, &models.Certificate{}, &models.Product{}, &models.Price{}, &models.ProductVariant{}, &models.Coupon{}, &models.Order{}, &models.OrderItem{}, &models.Subscription{}, &models.Space{}, &models.CommunityMember{}, &models.Thread{}, &models.Reply{}, &models.Reaction{}, &models.CommunityEvent{}, &models.EventAttendee{}, &models.Funnel{}, &models.FunnelStep{}, &models.FunnelVisit{}, &models.FunnelConversion{}, &models.Calendar{}, &models.BookingEventType{}, &models.Availability{}, &models.Appointment{}, &models.AffiliateProgram{}, &models.AffiliateAccount{}, &models.AffiliateLink{}, &models.Commission{}, &models.Payout{}, &models.Workflow{}, &models.WorkflowAction{}, &models.WorkflowExecution{} /* grit:studio */}, studioCfg)
 		log.Println("GORM Studio mounted at /studio")
 	}
 
@@ -213,11 +212,12 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 	}
 
 	// Public website routes (no auth required, cached)
-	r.GET("/api/posts", publicCache, postHandler.ListPublished)
-	r.GET("/api/posts/:slug", publicCache, postHandler.GetBySlug)
-	r.GET("/api/posts/:slug/jsonld", publicCache, postHandler.JSONLD)
-	r.GET("/api/pages/:slug", publicCache, pageHandler.GetBySlug)
-	r.GET("/api/menus/location/:location", publicCache, menuHandler.GetByLocation)
+	// NOTE: Public routes use /api/p/ prefix to avoid conflicts with admin /api/ routes
+	r.GET("/api/p/posts", publicCache, postHandler.ListPublished)
+	r.GET("/api/p/posts/:slug", publicCache, postHandler.GetBySlug)
+	r.GET("/api/p/posts/:slug/jsonld", publicCache, postHandler.JSONLD)
+	r.GET("/api/p/pages/:slug", publicCache, pageHandler.GetBySlug)
+	r.GET("/api/p/menus/location/:location", publicCache, menuHandler.GetByLocation)
 	r.GET("/api/rss.xml", publicCache, postHandler.RSS)
 	r.GET("/sitemap.xml", publicCache, postHandler.Sitemap)
 	r.GET("/robots.txt", publicCache, postHandler.RobotsTxt)
@@ -231,26 +231,27 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 	r.GET("/api/email/track/click/:id", emailHandler.TrackClick)
 
 	// Public course routes (cached)
-	r.GET("/api/courses", publicCache, courseHandler.ListPublishedCourses)
-	r.GET("/api/courses/:slug", publicCache, courseHandler.GetPublishedCourse)
+	r.GET("/api/p/courses", publicCache, courseHandler.ListPublishedCourses)
+	r.GET("/api/p/courses/:slug", publicCache, courseHandler.GetPublishedCourse)
 	r.GET("/api/certificates/verify/:number", publicCache, courseHandler.VerifyCertificate)
 
 	// Public commerce routes (cached)
-	r.GET("/api/products", publicCache, commerceHandler.ListPublicProducts)
-	r.GET("/api/products/:slug", publicCache, commerceHandler.GetPublicProduct)
+	r.GET("/api/p/products", publicCache, commerceHandler.ListPublicProducts)
+	r.GET("/api/p/products/:slug", publicCache, commerceHandler.GetPublicProduct)
 	r.GET("/api/coupons/validate", shortCache, commerceHandler.ValidateCoupon)
 
 	// Public community routes (cached)
-	r.GET("/api/community/spaces", publicCache, communityHandler.ListPublicSpaces)
-	r.GET("/api/community/spaces/:slug", shortCache, communityHandler.GetPublicSpace)
+	r.GET("/api/p/community/spaces", publicCache, communityHandler.ListPublicSpaces)
+	r.GET("/api/p/community/spaces/:slug", shortCache, communityHandler.GetPublicSpace)
 
 	// Public funnel routes (cached)
-	r.GET("/api/funnels/:slug", publicCache, funnelHandler.GetPublicFunnel)
-	r.GET("/api/funnels/:slug/:stepSlug", publicCache, funnelHandler.GetPublicStep)
+	r.GET("/api/p/funnels/:slug", publicCache, funnelHandler.GetPublicFunnel)
+	r.GET("/api/p/funnels/:slug/:stepSlug", publicCache, funnelHandler.GetPublicStep)
 	r.POST("/api/funnels/track/visit", funnelHandler.TrackVisit)
 	r.POST("/api/funnels/track/conversion", funnelHandler.TrackConversion)
 
 	// Public booking routes (event type cached, slots are real-time)
+	r.GET("/api/p/booking/event-types", publicCache, bookingHandler.ListPublicEventTypes)
 	r.GET("/api/book/:slug", publicCache, bookingHandler.GetPublicEventType)
 	r.GET("/api/book/:slug/slots", bookingHandler.GetAvailableSlots)
 	r.POST("/api/book/:slug", bookingHandler.BookAppointment)
@@ -676,6 +677,9 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 
 	// Custom role-restricted routes
 	// grit:routes:custom
+
+	// Register contact activity event listeners
+	services.RegisterActivityListeners(db)
 
 	return r
 }

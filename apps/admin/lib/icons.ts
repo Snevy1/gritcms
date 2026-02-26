@@ -94,8 +94,21 @@ import {
   Minus,
   UserCog,
   ArrowDown,
+  Share2,
+  Ban,
+  Monitor,
+  Tablet,
+  Smartphone,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  Type as TypeIcon,
   type LucideIcon,
 } from "lucide-react";
+
+// Re-export Type as Type (avoid conflict with TS reserved word)
+const Type = TypeIcon;
 
 export const iconMap: Record<string, LucideIcon> = {
   Users,
@@ -149,6 +162,8 @@ export const iconMap: Record<string, LucideIcon> = {
   Minus,
   UserCog,
   ArrowDown,
+  Share2,
+  Type,
 };
 
 export function getIcon(name: string): LucideIcon {
@@ -200,6 +215,7 @@ export {
   RefreshCw,
   Upload,
   File,
+  FileText,
   Image,
   User,
   UserCircle,
@@ -241,4 +257,23 @@ export {
   Minus,
   UserCog,
   ArrowDown,
+  Share2,
+  Ban,
+  Shield,
+  Newspaper,
+  BookOpen,
+  Layers,
+  Building2,
+  CheckSquare,
+  Paperclip,
+  UserCheck,
+  Type,
+  Palette,
+  Monitor,
+  Tablet,
+  Smartphone,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
 };

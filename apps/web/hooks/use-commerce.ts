@@ -17,7 +17,7 @@ export function usePublicProducts(params: { page?: number; pageSize?: number } =
     queryKey: ["public-products", { page, pageSize }],
     queryFn: async () => {
       const sp = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
-      const { data } = await api.get(`/api/products?${sp}`);
+      const { data } = await api.get(`/api/p/products?${sp}`);
       return {
         products: (data.data || []) as Product[],
         meta: data.meta as PaginatedMeta | undefined,
@@ -30,7 +30,7 @@ export function usePublicProduct(slug: string) {
   return useQuery({
     queryKey: ["public-products", slug],
     queryFn: async () => {
-      const { data } = await api.get(`/api/products/${slug}`);
+      const { data } = await api.get(`/api/p/products/${slug}`);
       return data.data as Product;
     },
     enabled: !!slug,

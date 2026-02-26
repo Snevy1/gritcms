@@ -69,19 +69,9 @@ func (h *PostHandler) List(c *gin.Context) {
 
 	if categorySlug != "" {
 		query = query.Where(
-			"posts.id IN (SELECT post_id FROM post_categories pc JOIN post_categories_ref cat ON pc.post_category_id = cat.id WHERE cat.slug = ?)",
+			"posts.id IN (SELECT post_id FROM post_categories_join pcj JOIN post_categories cat ON pcj.post_category_id = cat.id WHERE cat.slug = ?)",
 			categorySlug,
 		)
-		// Simpler approach: join through the many2many table
-		query = h.DB.Model(&models.Post{}).Where("posts.tenant_id = ?", tenantID)
-		if search != "" {
-			query = query.Where("posts.title ILIKE ? OR posts.slug ILIKE ?", "%"+search+"%", "%"+search+"%")
-		}
-		if status != "" {
-			query = query.Where("posts.status = ?", status)
-		}
-		query = query.Joins("JOIN post_categories ON post_categories.post_id = posts.id").
-			Joins("JOIN post_categories AS cat ON post_categories.post_category_id = cat.id AND cat.slug = ?", categorySlug)
 	}
 
 	if tagSlug != "" {
@@ -130,8 +120,10 @@ func (h *PostHandler) ListPublished(c *gin.Context) {
 	query := h.DB.Model(&models.Post{}).Where("posts.status = ?", models.PostStatusPublished)
 
 	if categorySlug != "" {
-		query = query.Joins("JOIN post_categories ON post_categories.post_id = posts.id").
-			Joins("JOIN post_categories AS cat ON post_categories.post_category_id = cat.id AND cat.slug = ?", categorySlug)
+		query = query.Where(
+			"posts.id IN (SELECT post_id FROM post_categories_join pcj JOIN post_categories cat ON pcj.post_category_id = cat.id WHERE cat.slug = ?)",
+			categorySlug,
+		)
 	}
 
 	if tagSlug != "" {

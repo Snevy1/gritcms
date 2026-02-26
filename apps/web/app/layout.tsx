@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
-import { DM_Sans, JetBrains_Mono } from "next/font/google";
+import { Onest, JetBrains_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import "./globals.css";
 
-const dmSans = DM_Sans({
+const onest = Onest({
   subsets: ["latin"],
-  variable: "--font-dm-sans",
+  variable: "--font-onest",
   weight: ["400", "500", "600", "700"],
 });
 
@@ -30,7 +30,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <body className={`${dmSans.variable} ${jetbrainsMono.variable} font-sans dark antialiased`}>
+      <body className={`${onest.variable} ${jetbrainsMono.variable} font-sans dark antialiased`}>
         <Providers>
           <ThemeProvider>
             <Navbar />

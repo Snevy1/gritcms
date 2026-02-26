@@ -133,7 +133,7 @@ export default function AnalyticsPage() {
         {row1Stats.map((stat) => {
           const Icon = stat.icon;
           const raw = dashboard
-            ? (dashboard as Record<string, unknown>)[stat.key]
+            ? (dashboard as unknown as Record<string, unknown>)[stat.key]
             : undefined;
           const value =
             raw !== undefined
@@ -176,7 +176,7 @@ export default function AnalyticsPage() {
         {row2Stats.map((stat) => {
           const Icon = stat.icon;
           const raw = dashboard
-            ? (dashboard as Record<string, unknown>)[stat.key]
+            ? (dashboard as unknown as Record<string, unknown>)[stat.key]
             : undefined;
           const value =
             raw !== undefined

@@ -277,6 +277,16 @@ func (h *BookingHandler) RescheduleAppointment(c *gin.Context) {
 
 // ---------- Public Booking Routes ----------
 
+// ListPublicEventTypes returns all event types from active calendars.
+func (h *BookingHandler) ListPublicEventTypes(c *gin.Context) {
+	var eventTypes []models.BookingEventType
+	h.DB.Joins("JOIN calendars ON calendars.id = booking_event_types.calendar_id AND calendars.status = ?", models.CalendarStatusActive).
+		Where("booking_event_types.tenant_id = ?", 1).
+		Order("booking_event_types.created_at ASC").
+		Find(&eventTypes)
+	c.JSON(http.StatusOK, gin.H{"data": eventTypes})
+}
+
 func (h *BookingHandler) GetPublicEventType(c *gin.Context) {
 	slug := c.Param("slug")
 	var et models.BookingEventType

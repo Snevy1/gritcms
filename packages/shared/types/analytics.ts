@@ -1,4 +1,4 @@
-import type { Contact } from "./contact";
+import type { Contact, ContactActivity } from "./contact";
 import type { Order } from "./commerce";
 
 export interface AnalyticsDashboard {
@@ -36,24 +36,52 @@ export interface ProductStat {
   revenue: number;
 }
 
-export interface ContactProfile {
-  contact: Contact;
-  subscriptions: unknown[];
-  enrollments: unknown[];
-  orders: Order[];
-  lifetime_value: number;
-  active_subs: unknown[];
-  certificates: unknown[];
-  activities: ContactActivity[];
+export interface ProfileSubscription {
+  id: number;
+  contact_id: number;
+  email_list_id: number;
+  list_id: number;
+  status: string;
+  source: string;
+  subscribed_at: string | null;
+  unsubscribed_at: string | null;
+  list?: { id: number; name: string };
 }
 
-export interface ContactActivity {
+export interface ProfileEnrollment {
   id: number;
-  tenant_id: number;
   contact_id: number;
-  module: string;
-  action: string;
-  details: string;
-  metadata: Record<string, unknown> | null;
-  created_at: string;
+  course_id: number;
+  status: string;
+  enrolled_at: string;
+  completed_at: string | null;
+  progress_percentage: number;
+  course?: { id: number; title: string; thumbnail: string };
+}
+
+export interface ProfileCertificate {
+  id: number;
+  enrollment_id: number;
+  certificate_number: string;
+  issued_at: string;
+  course?: { id: number; title: string };
+}
+
+export interface ProfileActiveSubscription {
+  id: number;
+  contact_id: number;
+  status: string;
+  product?: { id: number; name: string };
+  price?: { amount: number; currency: string; interval: string };
+}
+
+export interface ContactProfile {
+  contact: Contact;
+  subscriptions: ProfileSubscription[];
+  enrollments: ProfileEnrollment[];
+  orders: Order[];
+  lifetime_value: number;
+  active_subs: ProfileActiveSubscription[];
+  certificates: ProfileCertificate[];
+  activities: ContactActivity[];
 }

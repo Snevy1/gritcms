@@ -104,7 +104,6 @@ export type {
   SubscriberGrowthPoint,
   ProductStat,
   ContactProfile,
-  ContactActivity,
 } from "./analytics";
 export type {
   Space,

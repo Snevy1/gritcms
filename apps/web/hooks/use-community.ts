@@ -8,7 +8,7 @@ export function usePublicSpaces() {
   return useQuery({
     queryKey: ["public-spaces"],
     queryFn: async () => {
-      const { data } = await api.get("/api/community/spaces");
+      const { data } = await api.get("/api/p/community/spaces");
       return data.data as Space[];
     },
   });
@@ -18,7 +18,7 @@ export function usePublicSpace(slug: string) {
   return useQuery({
     queryKey: ["public-spaces", slug],
     queryFn: async () => {
-      const { data } = await api.get(`/api/community/spaces/${slug}`);
+      const { data } = await api.get(`/api/p/community/spaces/${slug}`);
       return data.data as Space;
     },
     enabled: !!slug,

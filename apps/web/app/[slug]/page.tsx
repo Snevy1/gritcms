@@ -6,6 +6,8 @@ import { ArrowLeft } from "lucide-react";
 import { usePublicPage } from "@/hooks/use-website";
 import { ContentBlockList } from "@/components/content-blocks";
 import { PageJsonLd } from "@/components/json-ld";
+import { LivePageRenderer } from "@/components/live-page-renderer";
+import type { PageSection } from "@repo/shared/sections";
 
 export default function DynamicPage() {
   const params = useParams();
@@ -46,6 +48,21 @@ export default function DynamicPage() {
           Back to Home
         </Link>
       </div>
+    );
+  }
+
+  // Detect if content is section-based (new page builder) or block-based (legacy)
+  const isSectionBased =
+    Array.isArray(page.content) &&
+    page.content.length > 0 &&
+    (page.content[0] as unknown as Record<string, unknown>)?.sectionId;
+
+  if (isSectionBased) {
+    return (
+      <>
+        <PageJsonLd page={page} />
+        <LivePageRenderer sections={page.content as unknown as PageSection[]} />
+      </>
     );
   }
 

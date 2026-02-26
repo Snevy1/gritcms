@@ -22,7 +22,7 @@ export function usePublicCourses(params: CourseListParams = {}) {
     queryKey: ["public-courses", { page, pageSize }],
     queryFn: async () => {
       const sp = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
-      const { data } = await api.get(`/api/courses?${sp}`);
+      const { data } = await api.get(`/api/p/courses?${sp}`);
       return {
         courses: (data.data || []) as Course[],
         meta: data.meta as PaginatedMeta | undefined,
@@ -35,7 +35,7 @@ export function usePublicCourse(slug: string) {
   return useQuery({
     queryKey: ["public-courses", slug],
     queryFn: async () => {
-      const { data } = await api.get(`/api/courses/${slug}`);
+      const { data } = await api.get(`/api/p/courses/${slug}`);
       return data.data as Course;
     },
     enabled: !!slug,

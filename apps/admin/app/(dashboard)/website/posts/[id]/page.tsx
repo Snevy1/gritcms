@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { usePost, useUpdatePost, useCreatePost, usePostCategories, usePostTags } from "@/hooks/use-website";
 import { ChevronLeft, Loader2, X } from "@/lib/icons";
+import { Dropzone, type UploadedFile } from "@/components/ui/dropzone";
 
 export default function PostEditorPage() {
   const router = useRouter();
@@ -161,15 +162,14 @@ export default function PostEditorPage() {
           {/* Featured Image */}
           <div className="rounded-xl border border-border bg-bg-secondary p-4 space-y-3">
             <h3 className="text-sm font-semibold text-foreground">Featured Image</h3>
-            <input type="text" value={featuredImage} onChange={(e) => setFeaturedImage(e.target.value)} placeholder="Image URL" className="w-full rounded-lg border border-border bg-bg-tertiary px-3 py-1.5 text-sm text-foreground placeholder:text-text-muted focus:outline-none" />
-            {featuredImage && (
-              <div className="relative rounded-lg overflow-hidden">
-                <img src={featuredImage} alt="" className="w-full h-32 object-cover" />
-                <button onClick={() => setFeaturedImage("")} className="absolute top-1 right-1 rounded bg-black/50 p-1 text-white hover:bg-black/70">
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            )}
+            <Dropzone
+              variant="default"
+              maxFiles={1}
+              maxSize={5 * 1024 * 1024}
+              accept={{ "image/*": [".jpg", ".jpeg", ".png", ".gif", ".webp"] }}
+              value={featuredImage ? [{ url: featuredImage, name: "featured", size: 0, type: "image/jpeg" } as UploadedFile] : []}
+              onFilesChange={(files) => setFeaturedImage(files[0]?.url || "")}
+            />
           </div>
 
           {/* Categories */}

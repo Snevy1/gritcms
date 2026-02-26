@@ -28,7 +28,7 @@ export function usePublicPosts(params: PostListParams = {}) {
       const sp = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
       if (category) sp.set("category", category);
       if (tag) sp.set("tag", tag);
-      const { data } = await api.get(`/api/posts?${sp}`);
+      const { data } = await api.get(`/api/p/posts?${sp}`);
       return {
         posts: (data.data || []) as Post[],
         meta: data.meta as PaginatedMeta | undefined,
@@ -41,7 +41,7 @@ export function usePublicPost(slug: string) {
   return useQuery({
     queryKey: ["public-post", slug],
     queryFn: async () => {
-      const { data } = await api.get(`/api/posts/${slug}`);
+      const { data } = await api.get(`/api/p/posts/${slug}`);
       return data.data as Post;
     },
     enabled: !!slug,
@@ -54,7 +54,7 @@ export function usePublicPage(slug: string) {
   return useQuery({
     queryKey: ["public-page", slug],
     queryFn: async () => {
-      const { data } = await api.get(`/api/pages/${slug}`);
+      const { data } = await api.get(`/api/p/pages/${slug}`);
       return data.data as Page;
     },
     enabled: !!slug,
@@ -91,7 +91,7 @@ export function useMenu(location: string) {
   return useQuery({
     queryKey: ["public-menu", location],
     queryFn: async () => {
-      const { data } = await api.get(`/api/menus/location/${location}`);
+      const { data } = await api.get(`/api/p/menus/location/${location}`);
       return data.data as Menu;
     },
     retry: false,
@@ -134,7 +134,7 @@ export function usePostJsonLd(slug: string) {
   return useQuery({
     queryKey: ["post-jsonld", slug],
     queryFn: async () => {
-      const { data } = await api.get(`/api/posts/${slug}/jsonld`);
+      const { data } = await api.get(`/api/p/posts/${slug}/jsonld`);
       return data;
     },
     enabled: !!slug,

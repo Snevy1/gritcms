@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
@@ -13,6 +13,14 @@ interface ListInfo {
 }
 
 export default function EmailPreferencesPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-border border-t-accent" /></div>}>
+      <EmailPreferencesContent />
+    </Suspense>
+  );
+}
+
+function EmailPreferencesContent() {
   const searchParams = useSearchParams();
   const emailParam = searchParams.get("email") || "";
 

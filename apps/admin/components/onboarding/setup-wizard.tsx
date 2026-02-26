@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
 import {
   Check,
   ChevronRight,
@@ -12,7 +11,9 @@ import {
   FileText,
   Zap,
   ExternalLink,
+  Loader2,
 } from "@/lib/icons";
+import { apiClient } from "@/lib/api-client";
 
 /* ─── localStorage key ────────────────────────────────────────── */
 const ONBOARDED_KEY = "gritcms-onboarded";
@@ -115,7 +116,6 @@ export function SetupWizard() {
   });
   const [skippedEmail, setSkippedEmail] = useState(false);
   const { completeWizard } = useOnboarding();
-  const router = useRouter();
 
   const totalSteps = 4;
 
@@ -134,9 +134,31 @@ export function SetupWizard() {
     goNext();
   };
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
+    try {
+      // 1. Save site settings
+      await apiClient.put("/api/settings/general", {
+        site_name: siteSettings.siteName,
+        site_description: siteSettings.siteTagline,
+        ...(siteSettings.logoUrl ? { site_logo: siteSettings.logoUrl } : {}),
+      });
+
+      // 2. Create email list if not skipped
+      if (!skippedEmail && emailList.listName.trim()) {
+        await apiClient.post("/api/email/lists", {
+          name: emailList.listName,
+          description: emailList.listDescription,
+        });
+      }
+
+      // 3. Seed defaults (email templates, funnel templates, sample course, home page)
+      await apiClient.post("/api/seed-defaults");
+    } catch {
+      // Non-blocking — wizard still completes even if API calls fail
+      console.error("Onboarding API calls partially failed");
+    }
+
     completeWizard();
-    router.push("/dashboard");
   };
 
   const progressPercent = ((step + 1) / totalSteps) * 100;
@@ -214,6 +236,7 @@ export function SetupWizard() {
               emailList={emailList}
               skippedEmail={skippedEmail}
               onComplete={handleComplete}
+              saving={false}
             />
           </StepTransition>
         </div>
@@ -499,13 +522,21 @@ function CompletionStep({
   emailList: EmailListSettings;
   skippedEmail: boolean;
   onComplete: () => void;
+  saving: boolean;
 }) {
   const [showConfetti, setShowConfetti] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowConfetti(true), 200);
     return () => clearTimeout(timer);
   }, []);
+
+  const handleFinish = async () => {
+    setIsSaving(true);
+    await onComplete();
+    setIsSaving(false);
+  };
 
   const quickLinks = [
     {
@@ -619,9 +650,9 @@ function CompletionStep({
             <a
               key={link.href}
               href={link.href}
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.preventDefault();
-                localStorage.setItem(ONBOARDED_KEY, "true");
+                await handleFinish();
                 window.location.href = link.href;
               }}
               className="flex items-center gap-2.5 rounded-xl border border-border bg-bg-elevated px-3 py-2.5 text-left hover:bg-bg-hover transition-colors group"
@@ -642,11 +673,21 @@ function CompletionStep({
 
       {/* Go to dashboard */}
       <button
-        onClick={onComplete}
-        className="inline-flex items-center gap-2 rounded-xl bg-accent px-8 py-3 text-sm font-semibold text-white hover:bg-accent-hover transition-colors shadow-lg shadow-accent/20"
+        onClick={handleFinish}
+        disabled={isSaving}
+        className="inline-flex items-center gap-2 rounded-xl bg-accent px-8 py-3 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60 transition-colors shadow-lg shadow-accent/20"
       >
-        Go to Dashboard
-        <ArrowRight className="h-4 w-4" />
+        {isSaving ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Setting up your platform...
+          </>
+        ) : (
+          <>
+            Go to Dashboard
+            <ArrowRight className="h-4 w-4" />
+          </>
+        )}
       </button>
     </div>
   );

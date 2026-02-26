@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useTheme, type ThemeSettings } from "@/hooks/use-website";
 
 function hexToHSL(hex: string): string | null {
@@ -24,12 +24,28 @@ function hexToHSL(hex: string): string | null {
   return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
 }
 
+/** Load a Google Font dynamically by injecting a <link> tag */
+function loadGoogleFont(fontName: string) {
+  const id = `grit-gfont-${fontName.replace(/\s+/g, "-").toLowerCase()}`;
+  if (document.getElementById(id)) return; // already loaded
+
+  const link = document.createElement("link");
+  link.id = id;
+  link.rel = "stylesheet";
+  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontName)}:wght@400;500;600;700&display=swap`;
+  document.head.appendChild(link);
+}
+
 function applyTheme(theme: ThemeSettings) {
   const root = document.documentElement;
 
+  // Accent color
   if (theme.accent_color) {
     const hsl = hexToHSL(theme.accent_color);
-    if (hsl) root.style.setProperty("--accent", hsl);
+    if (hsl) {
+      root.style.setProperty("--accent", theme.accent_color);
+      root.style.setProperty("--accent-hover", theme.accent_color + "cc");
+    }
   }
   if (theme.background_color) {
     const hsl = hexToHSL(theme.background_color);
@@ -38,6 +54,14 @@ function applyTheme(theme: ThemeSettings) {
   if (theme.foreground_color) {
     const hsl = hexToHSL(theme.foreground_color);
     if (hsl) root.style.setProperty("--foreground", hsl);
+  }
+
+  // Brand font — load from Google Fonts and apply via CSS variable
+  const fontName = theme.body_font || theme.heading_font;
+  if (fontName) {
+    loadGoogleFont(fontName);
+    root.style.setProperty("--font-brand", `"${fontName}"`);
+    document.body.style.fontFamily = `"${fontName}", var(--font-onest), system-ui, sans-serif`;
   }
 
   // Update page title with site name
@@ -62,10 +86,12 @@ function applyTheme(theme: ThemeSettings) {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const { data: theme } = useTheme();
+  const applied = useRef(false);
 
   useEffect(() => {
     if (theme && Object.keys(theme).length > 0) {
       applyTheme(theme);
+      applied.current = true;
     }
   }, [theme]);
 

@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
 	"gritcms/apps/api/internal/models"
@@ -230,6 +232,42 @@ func (h *SettingHandler) SeedDefaults(c *gin.Context) {
 			}
 		}
 		seeded["sample_course"] = course.Title
+	}
+
+	// --- Default Home Page (Creator Home template) ---
+	var pageCount int64
+	h.DB.Model(&models.Page{}).Where("tenant_id = ? AND slug = ?", 1, "home").Count(&pageCount)
+	if pageCount == 0 {
+		now := time.Now()
+		homeSections := `[
+			{"sectionId":"header-003","props":{"logo":"{{site_name}}","links":"Home, Courses, Products, Blog, Community, Book a Call, Contact"}},
+			{"sectionId":"hero-002","props":{"heading":"Hey Friends 👋","subheading":"Welcome to my corner of the internet. I'm a creator, educator, and entrepreneur sharing ideas on productivity, creativity, and building a life you love.","primaryCta":"Subscribe to Newsletter","secondaryCta":"Explore Courses"}},
+			{"sectionId":"live-010","props":{"heading":"Connect With Me"}},
+			{"sectionId":"features-003","props":{"heading":"How Can I Help You?","subheading":"I create content, courses, and products to help you level up.","feature1Title":"Grow Your Audience","feature1Desc":"Learn strategies to build and engage your audience across platforms.","feature2Title":"Be More Productive","feature2Desc":"Science-backed productivity tips and systems to get more done.","feature3Title":"Build Your Business","feature3Desc":"Step-by-step guides to monetize your skills and build online income."}},
+			{"sectionId":"live-008","props":{"heading":"Featured Course","subheading":"My flagship course — the best place to start.","dataSource":"courses","limit":1}},
+			{"sectionId":"live-001","props":{"heading":"Explore My Courses","subheading":"Self-paced programs to help you master new skills.","dataSource":"courses","limit":6}},
+			{"sectionId":"about-001","props":{"heading":"About Me","description":"I'm a creator and educator passionate about sharing what I learn. This platform is where I share my courses, articles, videos, and resources to help you live a more productive and fulfilling life."}},
+			{"sectionId":"live-002","props":{"heading":"Digital Products & Resources","subheading":"Templates, ebooks, and tools I've created for you.","dataSource":"products","limit":4}},
+			{"sectionId":"live-003","props":{"heading":"From the Blog","subheading":"Deep dives, tutorials, and written guides.","dataSource":"posts","limit":3}},
+			{"sectionId":"live-006","props":{"heading":"Book a Call","subheading":"Schedule a one-on-one session for personalized guidance.","dataSource":"booking"}},
+			{"sectionId":"live-004","props":{"heading":"Join the Newsletter","subheading":"Get weekly insights on productivity, creativity, and building your dream life.","buttonText":"Subscribe","dataSource":"newsletter"}},
+			{"sectionId":"footer-002","props":{"logo":"{{site_name}}","copyright":"© 2026 {{site_name}}. All rights reserved."}}
+		]`
+		homePage := models.Page{
+			TenantID:        1,
+			Title:           "Home",
+			Slug:            "home",
+			Content:         datatypes.JSON(homeSections),
+			Status:          models.PageStatusPublished,
+			Template:        "creator-home",
+			MetaTitle:       "Home",
+			MetaDescription: "Welcome to my creator platform",
+			SortOrder:       0,
+			AuthorID:        1,
+			PublishedAt:     &now,
+		}
+		h.DB.Create(&homePage)
+		seeded["home_page"] = homePage.Title
 	}
 
 	if len(seeded) == 0 {

@@ -14,6 +14,7 @@ import {
   Package,
   Pencil,
 } from "@/lib/icons";
+import { Dropzone, type UploadedFile } from "@/components/ui/dropzone";
 import {
   useProduct,
   useUpdateProduct,
@@ -125,6 +126,8 @@ export default function ProductEditorPage() {
   const [description, setDescription] = useState("");
   const [type, setType] = useState<Product["type"]>("digital");
   const [status, setStatus] = useState<Product["status"]>("active");
+  const [images, setImages] = useState<string[]>([]);
+  const [downloadableFiles, setDownloadableFiles] = useState<Array<{ name: string; url: string }>>([]);
   const [initialized, setInitialized] = useState(false);
 
   // Pricing state
@@ -143,6 +146,8 @@ export default function ProductEditorPage() {
     setDescription(product.description ?? "");
     setType(product.type ?? "digital");
     setStatus(product.status ?? "active");
+    setImages(product.images ?? []);
+    setDownloadableFiles(product.downloadable_files ?? []);
     setInitialized(true);
   }
 
@@ -158,6 +163,8 @@ export default function ProductEditorPage() {
       description,
       type,
       status,
+      images,
+      downloadable_files: downloadableFiles,
     });
   };
 
@@ -430,6 +437,39 @@ export default function ProductEditorPage() {
                   <option value="archived">Archived</option>
                 </select>
               </div>
+
+              {/* Product Images */}
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-text-secondary mb-1">
+                  Product Images
+                </label>
+                <Dropzone
+                  variant="default"
+                  maxFiles={10}
+                  maxSize={5 * 1024 * 1024}
+                  accept={{ "image/*": [".jpg", ".jpeg", ".png", ".gif", ".webp"] }}
+                  value={images.map((url, i) => ({ url, name: `image-${i + 1}`, size: 0, type: "image/jpeg" } as UploadedFile))}
+                  onFilesChange={(files) => setImages(files.map((f) => f.url))}
+                  description="Upload up to 10 product images (max 5MB each)"
+                />
+              </div>
+
+              {/* Downloadable Files (for digital products) */}
+              {(type === "digital" || type === "membership") && (
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
+                    Downloadable Files
+                  </label>
+                  <Dropzone
+                    variant="inline"
+                    maxFiles={20}
+                    maxSize={100 * 1024 * 1024}
+                    onFilesChange={(files) => setDownloadableFiles(files.map((f) => ({ name: f.name, url: f.url })))}
+                    value={downloadableFiles.map((f) => ({ url: f.url, name: f.name, size: 0, type: "application/octet-stream" } as UploadedFile))}
+                    description="Upload files customers will receive after purchase (max 100MB each)"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end pt-2">

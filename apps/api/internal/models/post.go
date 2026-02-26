@@ -38,7 +38,7 @@ type Post struct {
 
 	// Relationships
 	Author     *User          `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
-	Categories []PostCategory `gorm:"many2many:post_categories" json:"categories,omitempty"`
+	Categories []PostCategory `gorm:"many2many:post_categories_join" json:"categories,omitempty"`
 	Tags       []PostTag      `gorm:"many2many:post_tags_join" json:"tags,omitempty"`
 
 	// Composite unique: tenant_id + slug
@@ -80,7 +80,7 @@ type PostCategory struct {
 
 	Parent   *PostCategory  `gorm:"foreignKey:ParentID" json:"parent,omitempty"`
 	Children []PostCategory `gorm:"foreignKey:ParentID" json:"children,omitempty"`
-	Posts    []Post         `gorm:"many2many:post_categories" json:"-"`
+	Posts    []Post         `gorm:"many2many:post_categories_join" json:"-"`
 }
 
 // BeforeCreate auto-generates the slug.
