@@ -15,7 +15,7 @@ import {
   X,
   Image as ImageIcon,
 } from "@/lib/icons";
-import { apiClient } from "@/lib/api-client";
+import { apiClient, uploadFile } from "@/lib/api-client";
 
 /* ─── localStorage key ────────────────────────────────────────── */
 const ONBOARDED_KEY = "gritcms-onboarded";
@@ -325,12 +325,9 @@ function SiteSettingsStep({
     setUploadError(null);
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const { data } = await apiClient.post("/api/uploads", formData, {
-        headers: { "Content-Type": undefined },
-      });
-      update("logoUrl", data.data?.url || data.data?.path || "");
+      const result = await uploadFile(file);
+      const d = result.data as Record<string, unknown>;
+      update("logoUrl", (d?.url || d?.path || "") as string);
     } catch {
       setUploadError("Failed to upload logo. You can add one later in Settings.");
     } finally {

@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { useDropzone, type Accept } from "react-dropzone";
 import { Upload, X, File, Image as ImageIcon, Loader2 } from "@/lib/icons";
-import { apiClient } from "@/lib/api-client";
+import { uploadFile } from "@/lib/api-client";
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -102,29 +102,25 @@ export function Dropzone({
 
       for (let i = 0; i < acceptedFiles.length; i++) {
         const file = acceptedFiles[i];
-        const formData = new FormData();
-        formData.append("file", file);
 
         try {
-          const { data } = await apiClient.post(uploadEndpoint, formData, {
-            headers: { "Content-Type": undefined },
-            onUploadProgress: (e) => {
-              const fileProgress = ((i + (e.loaded / (e.total || 1))) / acceptedFiles.length) * 100;
-              setUploadProgress(Math.round(fileProgress));
-            },
+          const result = await uploadFile(file, uploadEndpoint, (percent) => {
+            const fileProgress = ((i + percent / 100) / acceptedFiles.length) * 100;
+            setUploadProgress(Math.round(fileProgress));
           });
 
+          const d = result.data as Record<string, unknown>;
           uploaded.push({
-            id: data.data?.id,
-            url: data.data?.url || data.data?.path || "",
-            name: data.data?.original_name || file.name,
-            size: data.data?.size || file.size,
-            type: data.data?.mime_type || file.type,
-            thumbnail_url: data.data?.thumbnail_url,
+            id: d?.id as number | undefined,
+            url: (d?.url || d?.path || "") as string,
+            name: (d?.original_name || file.name) as string,
+            size: (d?.size || file.size) as number,
+            type: (d?.mime_type || file.type) as string,
+            thumbnail_url: d?.thumbnail_url as string | undefined,
           });
         } catch (err: unknown) {
-          const axiosErr = err as { response?: { data?: { error?: { message?: string } } } };
-          const msg = axiosErr?.response?.data?.error?.message || `Failed to upload ${file.name}`;
+          const uploadErr = err as { response?: { data?: { error?: { message?: string } } } };
+          const msg = uploadErr?.response?.data?.error?.message || `Failed to upload ${file.name}`;
           setUploadError(msg);
         }
       }

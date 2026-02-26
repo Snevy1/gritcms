@@ -12,12 +12,48 @@ apiClient.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-  // Let browser auto-set Content-Type with boundary for FormData uploads
-  if (typeof FormData !== "undefined" && config.data instanceof FormData) {
-    delete config.headers["Content-Type"];
-  }
   return config;
 });
+
+/** Upload a file using fetch (bypasses Axios header issues with FormData). */
+export async function uploadFile(
+  file: File,
+  endpoint = "/api/uploads",
+  onProgress?: (percent: number) => void
+): Promise<{ data: Record<string, unknown>; message: string }> {
+  const token = Cookies.get("access_token");
+  const formData = new FormData();
+  formData.append("file", file);
+
+  // Use XMLHttpRequest for progress support
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_URL}${endpoint}`);
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+      };
+    }
+
+    xhr.onload = () => {
+      try {
+        const body = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(body);
+        } else {
+          reject({ response: { data: body, status: xhr.status } });
+        }
+      } catch {
+        reject(new Error("Upload failed"));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error("Network error during upload"));
+    xhr.send(formData);
+  });
+}
 
 let isRefreshing = false;
 let failedQueue: Array<{
