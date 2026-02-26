@@ -328,7 +328,7 @@ function SiteSettingsStep({
       const formData = new FormData();
       formData.append("file", file);
       const { data } = await apiClient.post("/api/uploads", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+        headers: { "Content-Type": undefined },
       });
       update("logoUrl", data.data?.url || data.data?.path || "");
     } catch {

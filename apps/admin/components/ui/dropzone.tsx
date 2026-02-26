@@ -107,7 +107,7 @@ export function Dropzone({
 
         try {
           const { data } = await apiClient.post(uploadEndpoint, formData, {
-            headers: { "Content-Type": "multipart/form-data" },
+            headers: { "Content-Type": undefined },
             onUploadProgress: (e) => {
               const fileProgress = ((i + (e.loaded / (e.total || 1))) / acceptedFiles.length) * 100;
               setUploadProgress(Math.round(fileProgress));
