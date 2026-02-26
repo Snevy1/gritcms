@@ -75,12 +75,20 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	// First user becomes OWNER (platform setup)
+	role := models.RoleUser
+	var userCount int64
+	h.DB.Model(&models.User{}).Count(&userCount)
+	if userCount == 0 {
+		role = models.RoleOwner
+	}
+
 	user := models.User{
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
 		Email:     req.Email,
 		Password:  req.Password,
-		Role:      models.RoleUser,
+		Role:      role,
 		Active:    true,
 	}
 
