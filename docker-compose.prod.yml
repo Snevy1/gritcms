@@ -42,23 +42,23 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${API_URL:-http://localhost:8080}
     container_name: gritcms-web
     restart: unless-stopped
     expose:
       - "3000"
-    environment:
-      NEXT_PUBLIC_API_URL: ${API_URL:-http://api:8080}
 
   admin:
     build:
       context: .
       dockerfile: apps/admin/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${API_URL:-http://localhost:8080}
     container_name: gritcms-admin
     restart: unless-stopped
     expose:
       - "3000"
-    environment:
-      NEXT_PUBLIC_API_URL: ${API_URL:-http://api:8080}
 
   postgres:
     image: postgres:16-alpine
