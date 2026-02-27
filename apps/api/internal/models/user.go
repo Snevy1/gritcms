@@ -147,29 +147,29 @@ func Models() []interface{} {
 	}
 }
 
-// Migrate runs database migrations only for tables that don't exist yet.
-// It prints which tables were created and which were skipped.
+// Migrate runs database migrations for all models.
+// It creates new tables and adds missing columns to existing tables.
 func Migrate(db *gorm.DB) error {
 	models := Models()
-	migrated := 0
+	created := 0
 
 	for _, model := range models {
-		if db.Migrator().HasTable(model) {
-			log.Printf("  ✓ %T — already exists, skipping", model)
-			continue
-		}
-
+		exists := db.Migrator().HasTable(model)
 		if err := db.AutoMigrate(model); err != nil {
 			return fmt.Errorf("migrating %T: %w", model, err)
 		}
-		log.Printf("  ✓ %T — created", model)
-		migrated++
+		if exists {
+			log.Printf("  ✓ %T — synced", model)
+		} else {
+			log.Printf("  ✓ %T — created", model)
+			created++
+		}
 	}
 
-	if migrated == 0 {
-		log.Println("All tables are up to date — nothing to migrate.")
+	if created == 0 {
+		log.Println("All tables synced — no new tables created.")
 	} else {
-		log.Printf("Migrated %d table(s).", migrated)
+		log.Printf("Created %d new table(s).", created)
 	}
 
 	return nil
