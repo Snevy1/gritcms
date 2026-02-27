@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMe } from "@/hooks/use-auth";
+import { useAnalyticsDashboard } from "@/hooks/use-analytics";
 import { StatsCard } from "@/components/widgets/stats-card";
 import { getIcon } from "@/lib/icons";
 
@@ -25,6 +26,7 @@ const moduleCards = [
 
 export default function AdminDashboard() {
   const { data: user } = useMe();
+  const { data: stats } = useAnalyticsDashboard();
 
   const greeting = () => {
     const hour = new Date().getHours();
@@ -47,10 +49,10 @@ export default function AdminDashboard() {
 
       {/* Stats overview */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatsCard label="Total Contacts" value="—" icon="Users" color="accent" />
-        <StatsCard label="Email Subscribers" value="—" icon="Mail" color="info" />
-        <StatsCard label="Active Students" value="—" icon="GraduationCap" color="success" />
-        <StatsCard label="Revenue" value="—" icon="DollarSign" color="warning" />
+        <StatsCard label="Total Contacts" value={stats?.total_contacts ?? 0} icon="Users" color="accent" format="number" href="/contacts" />
+        <StatsCard label="Email Subscribers" value={stats?.total_subscribers ?? 0} icon="Mail" color="info" format="number" href="/email" />
+        <StatsCard label="Active Students" value={stats?.active_students ?? 0} icon="GraduationCap" color="success" format="number" href="/courses" />
+        <StatsCard label="Revenue" value={Math.round((stats?.total_revenue ?? 0) / 100)} icon="DollarSign" color="warning" format="currency" href="/orders" />
       </div>
 
       {/* Quick Actions + Modules */}

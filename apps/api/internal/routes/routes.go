@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"runtime"
 	"time"
 
 	"github.com/MUKE-coder/gin-docs/gindocs"
@@ -710,6 +711,47 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 		// Workflow executions (admin)
 		admin.GET("/workflows/executions", workflowHandler.ListExecutions)
 		admin.GET("/workflows/executions/:execId", workflowHandler.GetExecution)
+
+		// System info (admin)
+		admin.GET("/admin/system/info", func(c *gin.Context) {
+			var dbVersion string
+			db.Raw("SELECT version()").Scan(&dbVersion)
+
+			enabledServices := []string{}
+			if svc.Cache != nil {
+				enabledServices = append(enabledServices, "Redis Cache")
+			}
+			if svc.Storage != nil {
+				enabledServices = append(enabledServices, "S3 Storage")
+			}
+			if svc.Mailer != nil {
+				enabledServices = append(enabledServices, "Email (Resend)")
+			}
+			if svc.AI != nil {
+				enabledServices = append(enabledServices, "AI")
+			}
+			if svc.Jobs != nil {
+				enabledServices = append(enabledServices, "Background Jobs")
+			}
+
+			var tableCount int64
+			db.Raw("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'").Scan(&tableCount)
+
+			var modelCount int
+			modelCount = len(models.Models())
+
+			c.JSON(http.StatusOK, gin.H{"data": gin.H{
+				"version":          "1.0.0",
+				"go_version":       runtime.Version(),
+				"environment":      cfg.AppEnv,
+				"database":         dbVersion,
+				"database_tables":  tableCount,
+				"registered_models": modelCount,
+				"enabled_services": enabledServices,
+				"os":               runtime.GOOS + "/" + runtime.GOARCH,
+				"goroutines":       runtime.NumGoroutine(),
+			}})
+		})
 
 		// grit:routes:admin
 	}

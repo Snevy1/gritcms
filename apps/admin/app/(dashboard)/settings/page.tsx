@@ -16,7 +16,10 @@ import {
   Calendar,
   ExternalLink,
   Unplug,
+  Server,
+  Monitor,
 } from "@/lib/icons";
+import { useSystemInfo } from "@/hooks/use-analytics";
 import { Dropzone, type UploadedFile } from "@/components/ui/dropzone";
 import {
   useGoogleAuthUrl,
@@ -75,6 +78,7 @@ const tabs = [
   { id: "social", label: "Social", icon: Share2 },
   { id: "seo", label: "SEO", icon: Search },
   { id: "integrations", label: "Integrations", icon: Plug },
+  { id: "system", label: "System", icon: Server },
 ];
 
 /* ─── Input component ──────────────────────────────────────────── */
@@ -227,6 +231,7 @@ export default function SettingsPage() {
         {activeTab === "integrations" && (
           <IntegrationsTab integrations={integrations} onChange={updateInt} />
         )}
+        {activeTab === "system" && <SystemTab />}
       </div>
     </div>
   );
@@ -765,6 +770,87 @@ function IntegrationsTab({
           (ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET) take
           precedence if set.
         </p>
+      </div>
+    </div>
+  );
+}
+
+/* ─── System Tab ──────────────────────────────────────────────── */
+function SystemTab() {
+  const { data: info, isLoading } = useSystemInfo();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (!info) return null;
+
+  const infoRows = [
+    { label: "Version", value: `GritCMS v${info.version}` },
+    { label: "Go Runtime", value: info.go_version },
+    { label: "Environment", value: info.environment },
+    { label: "Operating System", value: info.os },
+    { label: "Database", value: info.database },
+    { label: "Database Tables", value: String(info.database_tables) },
+    { label: "Registered Models", value: String(info.registered_models) },
+    { label: "Active Goroutines", value: String(info.goroutines) },
+  ];
+
+  return (
+    <div className="space-y-8 max-w-2xl">
+      <div>
+        <h2 className="text-lg font-semibold text-foreground mb-1">
+          System Information
+        </h2>
+        <p className="text-sm text-text-secondary">
+          Runtime details and service status for your GritCMS instance.
+        </p>
+      </div>
+
+      {/* System details */}
+      <div className="space-y-1">
+        {infoRows.map((row) => (
+          <div
+            key={row.label}
+            className="flex items-center justify-between rounded-lg px-4 py-3 odd:bg-bg-tertiary"
+          >
+            <span className="text-sm text-text-secondary">{row.label}</span>
+            <span className="text-sm font-medium text-foreground font-mono">
+              {row.value}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Enabled services */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Monitor className="h-4 w-4 text-accent" />
+          <h2 className="text-lg font-semibold text-foreground">
+            Enabled Services
+          </h2>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {info.enabled_services.length > 0 ? (
+            info.enabled_services.map((service) => (
+              <span
+                key={service}
+                className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-500"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                {service}
+              </span>
+            ))
+          ) : (
+            <p className="text-sm text-text-muted">
+              No optional services are currently enabled.
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

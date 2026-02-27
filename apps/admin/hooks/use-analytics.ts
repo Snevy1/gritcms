@@ -82,3 +82,25 @@ export function useContactProfile(id: number) {
     enabled: id > 0,
   });
 }
+
+export interface SystemInfo {
+  version: string;
+  go_version: string;
+  environment: string;
+  database: string;
+  database_tables: number;
+  registered_models: number;
+  enabled_services: string[];
+  os: string;
+  goroutines: number;
+}
+
+export function useSystemInfo() {
+  return useQuery({
+    queryKey: ["system-info"],
+    queryFn: async () => {
+      const { data } = await apiClient.get("/api/admin/system/info");
+      return data.data as SystemInfo;
+    },
+  });
+}

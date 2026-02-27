@@ -97,6 +97,7 @@ import {
   Share2,
   Ban,
   Monitor,
+  Server,
   Tablet,
   Smartphone,
   PanelLeftClose,
@@ -284,4 +285,5 @@ export {
   Copy,
   Plug,
   Unplug,
+  Server,
 };

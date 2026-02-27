@@ -305,6 +305,13 @@ export function Sidebar({ user, collapsed, onToggle, mobileOpen, onMobileClose }
 
         {/* Bottom section - flows right after nav items */}
         <div className="border-t border-border p-3 space-y-2">
+          {/* Version indicator */}
+          {!collapsed && (
+            <div className="px-3 py-1">
+              <p className="text-[10px] font-medium text-text-muted tracking-wider">GritCMS v1.0.0</p>
+            </div>
+          )}
+
           {/* Theme toggle */}
           <button
             onClick={toggleTheme}
