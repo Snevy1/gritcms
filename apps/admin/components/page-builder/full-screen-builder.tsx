@@ -32,6 +32,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Loader2,
+  ExternalLink,
 } from "@/lib/icons";
 import { usePageBuilder, getSectionLabel } from "./use-page-builder";
 import { SectionPicker } from "./section-picker";
@@ -261,6 +262,19 @@ export function FullScreenBuilder({
 
         {/* Right toolbar */}
         <div className="flex items-center gap-2">
+          {status === "published" && slug && (
+            <a
+              href={`${process.env.NEXT_PUBLIC_WEB_URL || ""}/${slug === "home" ? "" : slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-text-muted hover:bg-bg-hover hover:text-foreground transition-colors"
+              title="View live page"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              View Live
+            </a>
+          )}
+
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
