@@ -21,14 +21,14 @@ require (
 	github.com/xuri/excelize/v2 v2.10.0
 	golang.org/x/crypto v0.48.0
 	golang.org/x/oauth2 v0.35.0
-	google.golang.org/api v0.269.0
+	google.golang.org/api v0.228.0
 	gorm.io/datatypes v1.2.7
 	gorm.io/driver/postgres v1.5.11
 	gorm.io/gorm v1.31.1
 )
 
 require (
-	cloud.google.com/go/auth v0.18.2 // indirect
+	cloud.google.com/go/auth v0.16.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
@@ -70,7 +70,7 @@ require (
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.12 // indirect
-	github.com/googleapis/gax-go/v2 v2.17.0 // indirect
+	github.com/googleapis/gax-go/v2 v2.14.1 // indirect
 	github.com/gorilla/context v1.1.1 // indirect
 	github.com/gorilla/mux v1.6.2 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
