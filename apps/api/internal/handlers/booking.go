@@ -449,19 +449,18 @@ func (h *BookingHandler) BookAppointment(c *gin.Context) {
 	endAt := startAt.Add(time.Duration(et.DurationMinutes) * time.Minute)
 
 	// Upsert contact
+	firstName, lastName := splitName(body.Name)
 	var contact models.Contact
-	result := h.DB.Where("email = ?", body.Email).First(&contact)
-	if result.Error != nil {
-		// Split name
-		firstName, lastName := splitName(body.Name)
-		contact = models.Contact{
+	if err := h.DB.Where("email = ? AND tenant_id = ?", body.Email, 1).
+		Attrs(models.Contact{
 			TenantID:  1,
 			Email:     body.Email,
 			FirstName: firstName,
 			LastName:  lastName,
 			Source:    "booking",
-		}
-		h.DB.Create(&contact)
+		}).FirstOrCreate(&contact).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create contact"})
+		return
 	}
 
 	// Create appointment
