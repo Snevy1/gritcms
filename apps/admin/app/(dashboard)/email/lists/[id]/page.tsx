@@ -9,7 +9,7 @@ import { ImportModal } from "@/components/import-modal";
 import type { ImportResult } from "@repo/shared/types";
 import Link from "next/link";
 
-const WEB_URL = process.env.NEXT_PUBLIC_WEB_URL || (typeof window !== "undefined" ? window.location.origin.replace("admin.", "") : "");
+const WEB_URL = process.env.NEXT_PUBLIC_WEB_URL || "";
 
 const SOURCES = [
   { label: "General", value: "" },
