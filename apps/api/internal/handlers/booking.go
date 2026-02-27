@@ -423,6 +423,14 @@ func (h *BookingHandler) GetAvailableSlots(c *gin.Context) {
 }
 
 func (h *BookingHandler) BookAppointment(c *gin.Context) {
+	// Catch any unexpected panics so the user gets a meaningful error
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[booking] PANIC in BookAppointment: %v", r)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Internal error: %v", r)})
+		}
+	}()
+
 	slug := c.Param("slug")
 	var body struct {
 		StartAt string `json:"start_at" binding:"required"`
@@ -443,7 +451,7 @@ func (h *BookingHandler) BookAppointment(c *gin.Context) {
 
 	startAt, err := time.Parse(time.RFC3339, body.StartAt)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format: " + err.Error()})
 		return
 	}
 	endAt := startAt.Add(time.Duration(et.DurationMinutes) * time.Minute)
@@ -459,7 +467,8 @@ func (h *BookingHandler) BookAppointment(c *gin.Context) {
 			LastName:  lastName,
 			Source:    "booking",
 		}).FirstOrCreate(&contact).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create contact"})
+		log.Printf("[booking] Failed to upsert contact: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create contact: " + err.Error()})
 		return
 	}
 
@@ -474,7 +483,8 @@ func (h *BookingHandler) BookAppointment(c *gin.Context) {
 		Notes:       body.Notes,
 	}
 	if err := h.DB.Create(&appt).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to book appointment"})
+		log.Printf("[booking] Failed to create appointment: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to book appointment: " + err.Error()})
 		return
 	}
 
