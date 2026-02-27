@@ -81,7 +81,7 @@ export default function CourseDetailPage() {
       return;
     }
 
-    if (course.access_type === "paid" && course.product_id) {
+    if (course.access_type === "paid") {
       createCheckout(
         {
           type: "course",

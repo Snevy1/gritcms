@@ -93,13 +93,43 @@ func (h *PaymentHandler) Checkout(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "This course is free — no payment needed"})
 			return
 		}
-		if course.ProductID == nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Course has no linked product"})
-			return
-		}
-		if err := h.db.First(&product, *course.ProductID).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Product not found"})
-			return
+		if course.ProductID != nil {
+			if err := h.db.First(&product, *course.ProductID).Error; err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Linked product not found"})
+				return
+			}
+		} else {
+			// Auto-create a product + price for the paid course
+			cur := course.Currency
+			if cur == "" {
+				cur = "USD"
+			}
+			product = models.Product{
+				TenantID:    1,
+				Name:        course.Title,
+				Slug:        course.Slug + "-product",
+				Type:        models.ProductTypeCourse,
+				Status:      "active",
+				Description: course.ShortDescription,
+			}
+			if err := h.db.Create(&product).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create product for course"})
+				return
+			}
+			price = models.Price{
+				TenantID:  1,
+				ProductID: product.ID,
+				Amount:    course.Price,
+				Currency:  cur,
+				Type:      models.PriceTypeOneTime,
+				SortOrder: 0,
+			}
+			if err := h.db.Create(&price).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create price for course"})
+				return
+			}
+			// Link product back to course
+			h.db.Model(&course).Update("product_id", product.ID)
 		}
 		currency = course.Currency
 
