@@ -153,9 +153,9 @@ export default function CourseDetailPage() {
       </Link>
 
       {/* Hero */}
-      <div className="grid gap-8 lg:grid-cols-[1fr,340px]">
+      <div className={`grid gap-8 ${checkoutData ? "lg:grid-cols-1 max-w-2xl mx-auto" : "lg:grid-cols-[1fr,340px]"}`}>
         {/* Left */}
-        <div>
+        <div className={checkoutData ? "hidden" : ""}>
           {/* Access badge */}
           <div className="flex items-center gap-2 mb-4">
             {course.access_type === "free" ? (

@@ -6,7 +6,7 @@ import {
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js";
-import { Loader2, Lock, CreditCard } from "lucide-react";
+import { Loader2, Lock, Shield, CreditCard } from "lucide-react";
 
 interface CheckoutFormProps {
   amount: number;
@@ -55,29 +55,60 @@ export function CheckoutForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <PaymentElement />
-      <button
-        type="submit"
-        disabled={!stripe || isProcessing}
-        className="w-full rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-      >
-        {isProcessing ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Processing...
-          </>
-        ) : (
-          <>
-            <Lock className="h-4 w-4" />
-            Pay {formattedAmount}
-          </>
-        )}
-      </button>
-      <p className="text-xs text-text-muted text-center flex items-center justify-center gap-1">
-        <CreditCard className="h-3.5 w-3.5" />
-        Secure payment powered by Stripe
-      </p>
-    </form>
+    <div className="space-y-5">
+      {/* Order summary */}
+      <div className="rounded-xl border border-border bg-bg-secondary p-4">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-text-secondary">Total</span>
+          <span className="text-lg font-bold text-foreground">
+            {formattedAmount}
+          </span>
+        </div>
+      </div>
+
+      {/* Payment form */}
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="rounded-xl border border-border bg-bg-elevated p-5">
+          <PaymentElement
+            options={{
+              layout: {
+                type: "tabs",
+                defaultCollapsed: false,
+              },
+            }}
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={!stripe || isProcessing}
+          className="w-full rounded-xl bg-accent px-6 py-3.5 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+        >
+          {isProcessing ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Processing payment...
+            </>
+          ) : (
+            <>
+              <Lock className="h-4 w-4" />
+              Pay {formattedAmount}
+            </>
+          )}
+        </button>
+
+        {/* Trust badges */}
+        <div className="flex items-center justify-center gap-4 pt-1">
+          <span className="flex items-center gap-1.5 text-xs text-text-muted">
+            <Shield className="h-3.5 w-3.5 text-green-400" />
+            Encrypted &amp; secure
+          </span>
+          <span className="flex items-center gap-1.5 text-xs text-text-muted">
+            <CreditCard className="h-3.5 w-3.5" />
+            Powered by Stripe
+          </span>
+        </div>
+      </form>
+    </div>
   );
 }

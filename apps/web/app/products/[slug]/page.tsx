@@ -102,9 +102,9 @@ export default function ProductDetailPage() {
         All products
       </Link>
 
-      <div className="grid gap-10 lg:grid-cols-2">
+      <div className={`grid gap-10 ${checkoutData ? "lg:grid-cols-1 max-w-2xl mx-auto" : "lg:grid-cols-2"}`}>
         {/* Images */}
-        <div>
+        <div className={checkoutData ? "hidden" : ""}>
           <div className="aspect-square rounded-xl border border-border overflow-hidden bg-bg-elevated">
             {images.length > 0 ? (
               <img
