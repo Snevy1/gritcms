@@ -32,7 +32,8 @@ function RegisterForm() {
       await register({ first_name: firstName, last_name: lastName, email, password });
       router.push(redirect);
     } catch (err: any) {
-      setError(err?.response?.data?.error || "Registration failed. Please try again.");
+      const apiErr = err?.response?.data?.error;
+      setError(typeof apiErr === "string" ? apiErr : apiErr?.message || "Registration failed. Please try again.");
     } finally {
       setLoading(false);
     }

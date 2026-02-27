@@ -50,19 +50,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const { data } = await api.post("/api/auth/login", { email, password });
-    const { access_token, refresh_token } = data.data;
-    setTokens(access_token, refresh_token);
-    // Fetch user profile
-    const me = await api.get("/api/auth/me");
-    setUser(me.data.data ?? me.data);
+    const tokens = data.data?.tokens;
+    setTokens(tokens.access_token, tokens.refresh_token);
+    setUser(data.data?.user ?? null);
   }, []);
 
   const register = useCallback(async (body: { first_name: string; last_name: string; email: string; password: string }) => {
     const { data } = await api.post("/api/auth/register", body);
-    const { access_token, refresh_token } = data.data;
-    setTokens(access_token, refresh_token);
-    const me = await api.get("/api/auth/me");
-    setUser(me.data.data ?? me.data);
+    const tokens = data.data?.tokens;
+    setTokens(tokens.access_token, tokens.refresh_token);
+    setUser(data.data?.user ?? null);
   }, []);
 
   const logout = useCallback(() => {

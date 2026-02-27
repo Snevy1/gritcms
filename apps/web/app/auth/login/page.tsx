@@ -26,7 +26,8 @@ function LoginForm() {
       await login(email, password);
       router.push(redirect);
     } catch (err: any) {
-      setError(err?.response?.data?.error || "Invalid email or password");
+      const apiErr = err?.response?.data?.error;
+      setError(typeof apiErr === "string" ? apiErr : apiErr?.message || "Invalid email or password");
     } finally {
       setLoading(false);
     }
