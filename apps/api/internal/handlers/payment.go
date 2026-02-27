@@ -217,8 +217,8 @@ func (h *PaymentHandler) Checkout(c *gin.Context) {
 		return
 	}
 
-	// Convert dollars to cents for Stripe
-	amountInCents := int64(math.Round(totalAmount * 100))
+	// price.Amount is already stored in cents (e.g. 3000 = $30.00)
+	amountInCents := int64(math.Round(totalAmount))
 
 	// Create pending order
 	order := models.Order{
