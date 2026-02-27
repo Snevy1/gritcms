@@ -6,6 +6,8 @@ import { useAnalyticsDashboard } from "@/hooks/use-analytics";
 import { StatsCard } from "@/components/widgets/stats-card";
 import { getIcon } from "@/lib/icons";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
 const quickActions = [
   { label: "New Blog Post", href: "/website", icon: "FileText", color: "accent" },
   { label: "Email Campaign", href: "/email", icon: "Mail", color: "info" },
@@ -114,7 +116,7 @@ export default function AdminDashboard() {
             <h2 className="text-lg font-semibold text-foreground mb-4">System</h2>
             <div className="space-y-2">
               <a
-                href="http://localhost:8080/studio"
+                href={`${API_URL}/studio`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-3 rounded-lg border border-border bg-bg-tertiary px-4 py-3 hover:border-accent/30 hover:bg-bg-hover transition-all group"
@@ -128,7 +130,7 @@ export default function AdminDashboard() {
                 </div>
               </a>
               <a
-                href="http://localhost:8080/docs"
+                href={`${API_URL}/docs`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-3 rounded-lg border border-border bg-bg-tertiary px-4 py-3 hover:border-accent/30 hover:bg-bg-hover transition-all group"
