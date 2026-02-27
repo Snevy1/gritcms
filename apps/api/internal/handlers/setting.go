@@ -48,27 +48,36 @@ func (h *SettingHandler) BulkUpsert(c *gin.Context) {
 
 	tx := h.DB.Begin()
 	for key, value := range body {
-		setting := models.Setting{
-			TenantID: 1,
-			Group:    group,
-			Key:      key,
-			Value:    value,
-			Type:     "string",
-		}
+		var existing models.Setting
+		// Search by (TenantID, Key) only — matches the actual unique index.
+		// This finds the record regardless of which group it was originally saved under.
+		result := tx.Where("tenant_id = ? AND \"key\" = ?", 1, key).First(&existing)
 
-		result := tx.Where("tenant_id = ? AND \"key\" = ? AND \"group\" = ?", 1, key, group).First(&models.Setting{})
 		if result.Error == gorm.ErrRecordNotFound {
+			setting := models.Setting{
+				TenantID: 1,
+				Group:    group,
+				Key:      key,
+				Value:    value,
+				Type:     "string",
+			}
 			if err := tx.Create(&setting).Error; err != nil {
 				tx.Rollback()
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save settings"})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save settings", "detail": err.Error()})
 				return
 			}
+		} else if result.Error != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query settings", "detail": result.Error.Error()})
+			return
 		} else {
-			if err := tx.Model(&models.Setting{}).
-				Where("tenant_id = ? AND \"key\" = ? AND \"group\" = ?", 1, key, group).
-				Update("value", value).Error; err != nil {
+			// Update value and correct the group if it was saved under a different one
+			if err := tx.Model(&existing).Updates(map[string]interface{}{
+				"value": value,
+				"group": group,
+			}).Error; err != nil {
 				tx.Rollback()
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save settings"})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save settings", "detail": err.Error()})
 				return
 			}
 		}
