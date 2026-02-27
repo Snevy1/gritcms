@@ -54,10 +54,19 @@ function todayStr() {
   return toDateStr(t.getFullYear(), t.getMonth(), t.getDate());
 }
 
-/** Format an ISO / HH:mm string to "9:00 AM" */
+/** Format an ISO / HH:mm string to local "9:00 AM" */
 function formatTime(raw: string) {
-  // raw could be "09:00", "09:30:00", or full ISO
-  const parts = raw.includes("T") ? raw.split("T")[1].split(":") : raw.split(":");
+  // If it's a full ISO/RFC3339 string, use Date for proper timezone conversion
+  if (raw.includes("T")) {
+    const d = new Date(raw);
+    return d.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  }
+  // Plain "HH:mm" fallback
+  const parts = raw.split(":");
   let h = parseInt(parts[0], 10);
   const m = parts[1];
   const ampm = h >= 12 ? "PM" : "AM";
@@ -68,8 +77,10 @@ function formatTime(raw: string) {
 
 /** Format for confirmation display: "Tuesday, March 4, 2026" */
 function formatDateLong(dateStr: string) {
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-US", {
+  // Parse YYYY-MM-DD without timezone shift
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
     month: "long",
