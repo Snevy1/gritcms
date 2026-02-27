@@ -57,10 +57,10 @@ export function CheckoutForm({
   return (
     <div className="space-y-5">
       {/* Order summary */}
-      <div className="rounded-xl border border-border bg-bg-secondary p-4">
+      <div className="rounded-xl border border-border p-4">
         <div className="flex items-center justify-between">
           <span className="text-sm text-text-secondary">Total</span>
-          <span className="text-lg font-bold text-foreground">
+          <span className="text-xl font-bold text-foreground">
             {formattedAmount}
           </span>
         </div>
@@ -68,21 +68,19 @@ export function CheckoutForm({
 
       {/* Payment form */}
       <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="rounded-xl border border-border bg-bg-elevated p-5">
-          <PaymentElement
-            options={{
-              layout: {
-                type: "tabs",
-                defaultCollapsed: false,
-              },
-            }}
-          />
-        </div>
+        <PaymentElement
+          options={{
+            layout: {
+              type: "tabs",
+              defaultCollapsed: false,
+            },
+          }}
+        />
 
         <button
           type="submit"
           disabled={!stripe || isProcessing}
-          className="w-full rounded-xl bg-accent px-6 py-3.5 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+          className="w-full rounded-xl bg-accent px-6 py-3.5 text-base font-semibold text-white hover:bg-accent-hover disabled:opacity-50 transition-all flex items-center justify-center gap-2"
         >
           {isProcessing ? (
             <>
@@ -98,9 +96,9 @@ export function CheckoutForm({
         </button>
 
         {/* Trust badges */}
-        <div className="flex items-center justify-center gap-4 pt-1">
+        <div className="flex items-center justify-center gap-4">
           <span className="flex items-center gap-1.5 text-xs text-text-muted">
-            <Shield className="h-3.5 w-3.5 text-green-400" />
+            <Shield className="h-3.5 w-3.5 text-green-500" />
             Encrypted &amp; secure
           </span>
           <span className="flex items-center gap-1.5 text-xs text-text-muted">
