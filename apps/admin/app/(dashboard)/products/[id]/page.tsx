@@ -463,10 +463,10 @@ export default function ProductEditorPage() {
                   <Dropzone
                     variant="inline"
                     maxFiles={20}
-                    maxSize={100 * 1024 * 1024}
+                    maxSize={150 * 1024 * 1024}
                     onFilesChange={(files) => setDownloadableFiles(files.map((f) => ({ name: f.name, url: f.url })))}
                     value={downloadableFiles.map((f) => ({ url: f.url, name: f.name, size: 0, type: "application/octet-stream" } as UploadedFile))}
-                    description="Upload files customers will receive after purchase (max 100MB each)"
+                    description="Upload files customers will receive after purchase (max 150MB each)"
                   />
                 </div>
               )}

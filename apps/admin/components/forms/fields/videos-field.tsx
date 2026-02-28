@@ -22,7 +22,7 @@ export function VideosField({ field, value, onChange, error }: VideosFieldProps)
     <Dropzone
       variant="default"
       maxFiles={field.max ?? 5}
-      maxSize={field.maxSize ?? 100 * 1024 * 1024}
+      maxSize={field.maxSize ?? 500 * 1024 * 1024}
       accept={{ "video/*": [".mp4", ".webm", ".mov"] }}
       value={existingFiles}
       onFilesChange={(files) => {

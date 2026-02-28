@@ -12,7 +12,10 @@ import {
   useDeleteTag,
   useImportContacts,
   useExportContacts,
+  useContactSources,
+  useSendEmailToContacts,
 } from "@/hooks/use-contacts";
+import { useEmailTemplates } from "@/hooks/use-email";
 import {
   Plus,
   Trash2,
@@ -26,23 +29,11 @@ import {
   Upload,
   Download,
   ChevronDown,
+  Mail,
 } from "@/lib/icons";
 import { Dropzone, type UploadedFile } from "@/components/ui/dropzone";
 import { ImportModal } from "@/components/import-modal";
-import type { Contact, Tag as TagType, ImportResult } from "@repo/shared/types";
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const SOURCE_TABS = [
-  { label: "All", value: "" },
-  { label: "Organic", value: "organic" },
-  { label: "Funnel", value: "funnel" },
-  { label: "Referral", value: "referral" },
-  { label: "Import", value: "import" },
-  { label: "Manual", value: "manual" },
-] as const;
+import type { Contact, Tag as TagType, EmailTemplate, ImportResult } from "@repo/shared/types";
 
 const sourceBadge: Record<string, string> = {
   organic: "bg-green-500/10 text-green-400",
@@ -109,7 +100,14 @@ export default function ContactsPage() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
 
+  // Send email state
+  const [showSendEmail, setShowSendEmail] = useState(false);
+  const [sendTemplateId, setSendTemplateId] = useState<number>(0);
+  const [sendSubject, setSendSubject] = useState("");
+
   // Data
+  const { data: sourcesData } = useContactSources();
+  const sources = sourcesData ?? [];
   const { data, isLoading } = useContacts({
     page,
     pageSize: 20,
@@ -125,6 +123,8 @@ export default function ContactsPage() {
   const { mutate: deleteTag } = useDeleteTag();
   const { mutate: importContacts, isPending: importing } = useImportContacts();
   const { mutate: exportContacts } = useExportContacts();
+  const { data: emailTemplates } = useEmailTemplates();
+  const { mutate: sendEmail, isPending: sendingEmail } = useSendEmailToContacts();
 
   const contacts = data?.data ?? [];
   const meta = data?.meta;
@@ -297,6 +297,13 @@ export default function ContactsPage() {
             )}
           </div>
           <button
+            onClick={() => setShowSendEmail(true)}
+            className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:bg-bg-hover transition-colors"
+          >
+            <Mail className="h-4 w-4" />
+            Send Email
+          </button>
+          <button
             onClick={openCreate}
             className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90 transition-colors"
           >
@@ -327,18 +334,28 @@ export default function ContactsPage() {
             </button>
           )}
         </form>
-        <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-secondary p-1">
-          {SOURCE_TABS.map((tab) => (
+        <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-secondary p-1 overflow-x-auto">
+          <button
+            onClick={() => { setSourceFilter(""); setPage(1); }}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap ${
+              sourceFilter === ""
+                ? "bg-accent text-white"
+                : "text-text-muted hover:text-foreground hover:bg-bg-hover"
+            }`}
+          >
+            All
+          </button>
+          {sources.map((src) => (
             <button
-              key={tab.value}
-              onClick={() => { setSourceFilter(tab.value); setPage(1); }}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                sourceFilter === tab.value
+              key={src}
+              onClick={() => { setSourceFilter(src); setPage(1); }}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap capitalize ${
+                sourceFilter === src
                   ? "bg-accent text-white"
                   : "text-text-muted hover:text-foreground hover:bg-bg-hover"
               }`}
             >
-              {tab.label}
+              {src}
             </button>
           ))}
         </div>
@@ -378,6 +395,13 @@ export default function ContactsPage() {
       {selectedIds.size > 0 && (
         <div className="flex items-center gap-3 rounded-lg border border-border bg-bg-secondary px-4 py-2.5">
           <span className="text-sm text-text-secondary">{selectedIds.size} selected</span>
+          <button
+            onClick={() => setShowSendEmail(true)}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-accent hover:bg-accent/10 transition-colors"
+          >
+            <Mail className="h-3.5 w-3.5" />
+            Send Email
+          </button>
           <button
             onClick={handleBulkDelete}
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 transition-colors"
@@ -807,6 +831,114 @@ export default function ContactsPage() {
         result={importResult}
         title="Import Contacts"
       />
+
+      {/* ================================================================= */}
+      {/* SEND EMAIL MODAL                                                  */}
+      {/* ================================================================= */}
+      {showSendEmail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-lg rounded-xl border border-border bg-bg-elevated p-6 space-y-5 mx-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-foreground">
+                Send Email
+              </h2>
+              <button
+                onClick={() => { setShowSendEmail(false); setSendTemplateId(0); setSendSubject(""); }}
+                className="rounded-lg p-1 text-text-muted hover:bg-bg-hover hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <p className="text-sm text-text-secondary">
+              {selectedIds.size > 0
+                ? `Send to ${selectedIds.size} selected contact(s)`
+                : sourceFilter
+                  ? `Send to all "${sourceFilter}" contacts`
+                  : "Send to all contacts"}
+            </p>
+
+            {/* Template select */}
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1">
+                Email Template *
+              </label>
+              <select
+                value={sendTemplateId}
+                onChange={(e) => {
+                  const id = Number(e.target.value);
+                  setSendTemplateId(id);
+                  const t = emailTemplates?.find((t) => t.id === id);
+                  if (t?.subject && !sendSubject) setSendSubject(t.subject);
+                }}
+                className="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+              >
+                <option value={0}>Select a template...</option>
+                {emailTemplates?.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Subject */}
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1">
+                Subject *
+              </label>
+              <input
+                type="text"
+                value={sendSubject}
+                onChange={(e) => setSendSubject(e.target.value)}
+                placeholder="Email subject line"
+                className="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => { setShowSendEmail(false); setSendTemplateId(0); setSendSubject(""); }}
+                className="rounded-lg border border-border px-4 py-2 text-sm text-text-secondary hover:bg-bg-hover"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  sendEmail(
+                    {
+                      contact_ids: selectedIds.size > 0 ? Array.from(selectedIds) : undefined,
+                      template_id: sendTemplateId,
+                      subject: sendSubject,
+                      source: selectedIds.size === 0 ? sourceFilter || undefined : undefined,
+                      tag: selectedIds.size === 0 ? tagFilter || undefined : undefined,
+                      send_all: selectedIds.size === 0 && !sourceFilter && !tagFilter,
+                    },
+                    {
+                      onSuccess: () => {
+                        setShowSendEmail(false);
+                        setSendTemplateId(0);
+                        setSendSubject("");
+                        setSelectedIds(new Set());
+                      },
+                    }
+                  );
+                }}
+                disabled={!sendTemplateId || !sendSubject.trim() || sendingEmail}
+                className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50"
+              >
+                {sendingEmail ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Mail className="h-4 w-4" />
+                )}
+                Send
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -131,6 +131,42 @@ export function useDeleteTag() {
   });
 }
 
+// --- Sources ---
+
+export function useContactSources() {
+  return useQuery({
+    queryKey: ["contact-sources"],
+    queryFn: async () => {
+      const { data } = await apiClient.get("/api/contacts/sources");
+      return data.data as string[];
+    },
+  });
+}
+
+// --- Send Email ---
+
+interface SendEmailParams {
+  contact_ids?: number[];
+  template_id: number;
+  subject: string;
+  source?: string;
+  tag?: string;
+  send_all?: boolean;
+}
+
+export function useSendEmailToContacts() {
+  return useMutation({
+    mutationFn: async (body: SendEmailParams) => {
+      const { data } = await apiClient.post("/api/contacts/send-email", body);
+      return data as { message: string; count: number };
+    },
+    onSuccess: (result) => {
+      toast.success(result.message);
+    },
+    onError: () => toast.error("Failed to send email"),
+  });
+}
+
 // --- Import / Export ---
 
 export function useImportContacts() {

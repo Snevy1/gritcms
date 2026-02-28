@@ -13,17 +13,21 @@ import (
 	"gorm.io/gorm"
 
 	"gritcms/apps/api/internal/events"
+	"gritcms/apps/api/internal/jobs"
+	"gritcms/apps/api/internal/mail"
 	"gritcms/apps/api/internal/models"
 )
 
 // ContactHandler handles contact CRUD operations.
 type ContactHandler struct {
-	DB *gorm.DB
+	DB     *gorm.DB
+	Mailer *mail.Mailer
+	Jobs   *jobs.Client
 }
 
 // NewContactHandler creates a new ContactHandler.
-func NewContactHandler(db *gorm.DB) *ContactHandler {
-	return &ContactHandler{DB: db}
+func NewContactHandler(db *gorm.DB, mailer *mail.Mailer, jobClient *jobs.Client) *ContactHandler {
+	return &ContactHandler{DB: db, Mailer: mailer, Jobs: jobClient}
 }
 
 // List returns a paginated list of contacts with search, filter, and sort.
@@ -568,5 +572,122 @@ func (h *ContactHandler) ImportContacts(c *gin.Context) {
 		"data": result,
 		"message": fmt.Sprintf("Import complete: %d created, %d updated, %d skipped",
 			result.Created, result.Updated, result.Skipped),
+	})
+}
+
+// ListSources returns all unique contact sources.
+func (h *ContactHandler) ListSources(c *gin.Context) {
+	var sources []string
+	h.DB.Model(&models.Contact{}).
+		Where("tenant_id = ? AND source != '' AND source IS NOT NULL", 1).
+		Distinct("source").
+		Order("source ASC").
+		Pluck("source", &sources)
+
+	c.JSON(http.StatusOK, gin.H{"data": sources})
+}
+
+// SendEmail sends an email template to selected contacts.
+func (h *ContactHandler) SendEmail(c *gin.Context) {
+	var body struct {
+		ContactIDs []uint `json:"contact_ids"`
+		TemplateID uint   `json:"template_id"`
+		Subject    string `json:"subject"`
+		Source     string `json:"source"`  // optional: send to all contacts with this source
+		Tag        string `json:"tag"`     // optional: send to all contacts with this tag
+		SendAll    bool   `json:"send_all"` // send to all contacts (respecting source/tag filters)
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Load the email template
+	var tmpl models.EmailTemplate
+	if err := h.DB.First(&tmpl, body.TemplateID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Template not found"})
+		return
+	}
+
+	if tmpl.HTMLContent == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Template has no HTML content"})
+		return
+	}
+
+	subject := body.Subject
+	if subject == "" {
+		subject = tmpl.Subject
+	}
+	if subject == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Subject is required"})
+		return
+	}
+
+	// Resolve contacts
+	var contacts []models.Contact
+	if body.SendAll || len(body.ContactIDs) == 0 {
+		// Send to filtered contacts
+		q := h.DB.Where("tenant_id = ?", 1)
+		if body.Source != "" {
+			q = q.Where("source = ?", body.Source)
+		}
+		if body.Tag != "" {
+			q = q.Where("id IN (SELECT contact_id FROM contact_tags ct JOIN tags t ON ct.tag_id = t.id WHERE t.name = ?)", body.Tag)
+		}
+		q.Find(&contacts)
+	} else {
+		h.DB.Where("id IN ?", body.ContactIDs).Find(&contacts)
+	}
+
+	if len(contacts) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No contacts found"})
+		return
+	}
+
+	if h.Mailer == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Email service not configured"})
+		return
+	}
+
+	// Send emails in a background goroutine
+	go func() {
+		ctx := c.Request.Context()
+		for _, contact := range contacts {
+			if contact.Email == "" {
+				continue
+			}
+
+			// Create send record
+			now := time.Now()
+			send := models.EmailSend{
+				TenantID:  1,
+				ContactID: contact.ID,
+				Subject:   subject,
+				Status:    models.SendStatusQueued,
+				SentAt:    &now,
+			}
+			h.DB.Create(&send)
+
+			messageID, err := h.Mailer.SendCampaignEmail(ctx, mail.CampaignEmailOptions{
+				To:       contact.Email,
+				Subject:  subject,
+				HTMLBody: tmpl.HTMLContent,
+			})
+
+			if err != nil {
+				h.DB.Model(&send).Update("status", models.SendStatusFailed)
+				continue
+			}
+
+			h.DB.Model(&send).Updates(map[string]interface{}{
+				"status":      models.SendStatusSent,
+				"external_id": messageID,
+			})
+		}
+	}()
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Sending email to %d contact(s)", len(contacts)),
+		"count":   len(contacts),
 	})
 }

@@ -897,11 +897,11 @@ export default function CourseEditorPage() {
                     <Dropzone
                       variant="compact"
                       maxFiles={1}
-                      maxSize={100 * 1024 * 1024}
+                      maxSize={500 * 1024 * 1024}
                       accept={{ "video/*": [".mp4", ".webm", ".mov"] }}
                       value={lessonForm.video_url ? [{ url: lessonForm.video_url, name: "video", size: 0, type: "video/mp4" } as UploadedFile] : []}
                       onFilesChange={(files) => setLessonForm({ ...lessonForm, video_url: files[0]?.url || "" })}
-                      description="Upload lesson video (max 100MB)"
+                      description="Upload lesson video (max 500MB)"
                     />
                   </div>
 

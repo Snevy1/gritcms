@@ -140,6 +140,7 @@ func main() {
 			Mailer:  mailer,
 			Storage: storageService,
 			Cache:   cacheService,
+			Jobs:    jobClient,
 		})
 		if err != nil {
 			log.Printf("Warning: Background worker failed to start: %v", err)

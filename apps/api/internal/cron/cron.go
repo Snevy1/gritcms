@@ -45,6 +45,17 @@ func New(redisURL string) (*Scheduler, error) {
 		Type:     "tokens:cleanup",
 	})
 
+	// Process scheduled campaigns — every minute
+	_, err = scheduler.Register("* * * * *", asynq.NewTask("campaign:check-scheduled", nil))
+	if err != nil {
+		return nil, fmt.Errorf("registering campaign check: %w", err)
+	}
+	RegisteredTasks = append(RegisteredTasks, Task{
+		Name:     "Process scheduled campaigns",
+		Schedule: "* * * * *",
+		Type:     "campaign:check-scheduled",
+	})
+
 	// grit:cron-tasks
 
 	return &Scheduler{scheduler: scheduler}, nil

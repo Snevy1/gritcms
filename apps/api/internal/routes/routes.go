@@ -178,13 +178,13 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 	}
 	cronHandler := &handlers.CronHandler{}
 	blogHandler := handlers.NewBlogHandler(db)
-	contactHandler := handlers.NewContactHandler(db)
+	contactHandler := handlers.NewContactHandler(db, svc.Mailer, svc.Jobs)
 	mediaHandler := handlers.NewMediaHandler(db, svc.Storage, svc.Jobs)
 	pageHandler := handlers.NewPageHandler(db)
 	postHandler := handlers.NewPostHandler(db)
 	menuHandler := handlers.NewMenuHandler(db)
 	settingHandler := handlers.NewSettingHandler(db)
-	emailHandler := handlers.NewEmailHandler(db)
+	emailHandler := handlers.NewEmailHandler(db, svc.Jobs)
 	courseHandler := handlers.NewCourseHandler(db)
 	commerceHandler := handlers.NewCommerceHandler(db)
 	analyticsHandler := handlers.NewAnalyticsHandler(db)
@@ -364,6 +364,8 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 
 		// Contact management (admin)
 		admin.GET("/contacts", contactHandler.List)
+		admin.GET("/contacts/sources", contactHandler.ListSources)
+		admin.POST("/contacts/send-email", contactHandler.SendEmail)
 		admin.GET("/contacts/:id", contactHandler.GetByID)
 		admin.POST("/contacts", contactHandler.Create)
 		admin.PUT("/contacts/:id", contactHandler.Update)

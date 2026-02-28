@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
 	"gritcms/apps/api/internal/events"
@@ -123,6 +125,17 @@ func (h *CommerceHandler) UpdateProduct(c *gin.Context) {
 		return
 	}
 	sanitizeUpdates(input)
+
+	// Marshal JSON fields to datatypes.JSON so GORM can write them to JSONB columns
+	jsonFields := []string{"images", "downloadable_files", "metadata"}
+	for _, field := range jsonFields {
+		if val, ok := input[field]; ok && val != nil {
+			b, err := json.Marshal(val)
+			if err == nil {
+				input[field] = datatypes.JSON(b)
+			}
+		}
+	}
 
 	if err := h.db.Model(&product).Updates(input).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update product"})

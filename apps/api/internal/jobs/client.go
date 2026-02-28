@@ -9,9 +9,11 @@ import (
 
 // Task type constants.
 const (
-	TypeEmailSend     = "email:send"
-	TypeImageProcess  = "image:process"
-	TypeTokensCleanup = "tokens:cleanup"
+	TypeEmailSend       = "email:send"
+	TypeImageProcess    = "image:process"
+	TypeTokensCleanup   = "tokens:cleanup"
+	TypeCampaignProcess        = "campaign:process"
+	TypeCampaignCheckScheduled = "campaign:check-scheduled"
 )
 
 // Client wraps asynq.Client for enqueuing background jobs.
@@ -85,6 +87,26 @@ func (c *Client) EnqueueProcessImage(uploadID uint, key, mimeType string) error 
 	_, err = c.client.Enqueue(task, asynq.MaxRetry(2))
 	if err != nil {
 		return fmt.Errorf("enqueuing image job: %w", err)
+	}
+	return nil
+}
+
+// CampaignPayload holds the data for a campaign processing job.
+type CampaignPayload struct {
+	CampaignID uint `json:"campaign_id"`
+}
+
+// EnqueueCampaignProcess enqueues a campaign processing job.
+func (c *Client) EnqueueCampaignProcess(campaignID uint) error {
+	payload, err := json.Marshal(CampaignPayload{CampaignID: campaignID})
+	if err != nil {
+		return fmt.Errorf("marshaling campaign payload: %w", err)
+	}
+
+	task := asynq.NewTask(TypeCampaignProcess, payload)
+	_, err = c.client.Enqueue(task, asynq.MaxRetry(1), asynq.Queue("default"))
+	if err != nil {
+		return fmt.Errorf("enqueuing campaign job: %w", err)
 	}
 	return nil
 }

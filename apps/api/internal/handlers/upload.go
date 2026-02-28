@@ -19,23 +19,52 @@ import (
 
 // AllowedMimeTypes defines which file types can be uploaded.
 var AllowedMimeTypes = map[string]bool{
-	"image/jpeg":      true,
-	"image/png":       true,
-	"image/gif":       true,
-	"image/webp":      true,
+	// Images
+	"image/jpeg": true,
+	"image/png":  true,
+	"image/gif":  true,
+	"image/webp": true,
+	"image/svg+xml": true,
+	// Video
 	"video/mp4":       true,
 	"video/webm":      true,
 	"video/quicktime": true,
-	"application/pdf": true,
-	"text/plain":      true,
-	"text/csv":        true,
+	// Audio
+	"audio/mpeg": true,
+	"audio/wav":  true,
+	"audio/ogg":  true,
+	"audio/mp4":  true,
+	// Documents
+	"application/pdf":  true,
+	"text/plain":       true,
+	"text/csv":         true,
 	"application/json": true,
-	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": true,
-	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+	"application/rtf":  true,
+	// Microsoft Office
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":         true, // .xlsx
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document":   true, // .docx
+	"application/vnd.openxmlformats-officedocument.presentationml.presentation": true, // .pptx
+	"application/vnd.ms-excel":      true, // .xls
+	"application/vnd.ms-powerpoint": true, // .ppt
+	"application/msword":            true, // .doc
+	// Archives
+	"application/zip":              true,
+	"application/x-zip-compressed": true,
+	"application/x-rar-compressed": true,
+	"application/x-7z-compressed":  true,
+	"application/gzip":             true,
+	"application/x-tar":            true,
+	// E-books
+	"application/epub+zip": true,
+	// Misc
+	"application/octet-stream": true,
 }
 
-// MaxUploadSize is the maximum file size (50 MB).
-const MaxUploadSize = 50 << 20
+// MaxUploadSize is the maximum file size for general uploads (150 MB).
+const MaxUploadSize = 150 << 20
+
+// MaxVideoUploadSize is the maximum file size for video uploads (500 MB).
+const MaxVideoUploadSize = 500 << 20
 
 // UploadHandler handles file upload endpoints.
 type UploadHandler struct {
@@ -56,8 +85,8 @@ func (h *UploadHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Explicitly parse multipart form
-	if err := c.Request.ParseMultipartForm(MaxUploadSize); err != nil {
+	// Explicitly parse multipart form (use video limit to accommodate largest uploads)
+	if err := c.Request.ParseMultipartForm(MaxVideoUploadSize); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": gin.H{
 				"code":    "INVALID_REQUEST",
@@ -79,19 +108,23 @@ func (h *UploadHandler) Create(c *gin.Context) {
 	}
 	defer file.Close()
 
-	// Validate file size
-	if header.Size > MaxUploadSize {
+	// Validate MIME type
+	mimeType := header.Header.Get("Content-Type")
+
+	// Validate file size — allow larger uploads for video content
+	maxSize := int64(MaxUploadSize)
+	if strings.HasPrefix(mimeType, "video/") {
+		maxSize = MaxVideoUploadSize
+	}
+	if header.Size > maxSize {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": gin.H{
 				"code":    "FILE_TOO_LARGE",
-				"message": fmt.Sprintf("File size exceeds maximum of %d MB", MaxUploadSize/(1<<20)),
+				"message": fmt.Sprintf("File size exceeds maximum of %d MB", maxSize/(1<<20)),
 			},
 		})
 		return
 	}
-
-	// Validate MIME type
-	mimeType := header.Header.Get("Content-Type")
 	if !AllowedMimeTypes[mimeType] {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": gin.H{
@@ -248,9 +281,14 @@ func (h *UploadHandler) Presign(c *gin.Context) {
 		return
 	}
 
-	if req.FileSize > MaxUploadSize {
+	// Allow larger uploads for video content
+	maxSize := int64(MaxUploadSize)
+	if strings.HasPrefix(req.ContentType, "video/") {
+		maxSize = MaxVideoUploadSize
+	}
+	if req.FileSize > maxSize {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": gin.H{"code": "FILE_TOO_LARGE", "message": fmt.Sprintf("File size exceeds maximum of %d MB", MaxUploadSize/(1<<20))},
+			"error": gin.H{"code": "FILE_TOO_LARGE", "message": fmt.Sprintf("File size exceeds maximum of %d MB", maxSize/(1<<20))},
 		})
 		return
 	}

@@ -115,6 +115,62 @@ func (m *Mailer) SendRaw(ctx context.Context, to, subject, htmlBody string) erro
 	return nil
 }
 
+// CampaignEmailOptions configures a campaign email with custom from/reply-to.
+type CampaignEmailOptions struct {
+	From     string // e.g. "Name <email@example.com>"
+	ReplyTo  string
+	To       string
+	Subject  string
+	HTMLBody string
+}
+
+// SendCampaignEmail sends a campaign email with custom from/reply-to and returns the Resend message ID.
+func (m *Mailer) SendCampaignEmail(ctx context.Context, opts CampaignEmailOptions) (string, error) {
+	from := opts.From
+	if from == "" {
+		from = m.from
+	}
+
+	payload := map[string]interface{}{
+		"from":    from,
+		"to":      []string{opts.To},
+		"subject": opts.Subject,
+		"html":    opts.HTMLBody,
+	}
+	if opts.ReplyTo != "" {
+		payload["reply_to"] = opts.ReplyTo
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("marshaling campaign email payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.resend.com/emails", bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("creating request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+m.apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := m.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("sending campaign email: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	_ = json.NewDecoder(resp.Body).Decode(&result)
+
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("resend API error (%d): %v", resp.StatusCode, result)
+	}
+
+	messageID, _ := result["id"].(string)
+	return messageID, nil
+}
+
 func (m *Mailer) renderTemplate(name string, data map[string]interface{}) (string, error) {
 	tmplStr, ok := EmailTemplates[name]
 	if !ok {
