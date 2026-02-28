@@ -890,33 +890,64 @@ export default function CourseEditorPage() {
                 </select>
               </div>
 
-              {editingLessonId && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary mb-1">Video</label>
-                    <Dropzone
-                      variant="compact"
-                      maxFiles={1}
-                      maxSize={500 * 1024 * 1024}
-                      accept={{ "video/*": [".mp4", ".webm", ".mov"] }}
-                      value={lessonForm.video_url ? [{ url: lessonForm.video_url, name: "video", size: 0, type: "video/mp4" } as UploadedFile] : []}
-                      onFilesChange={(files) => setLessonForm({ ...lessonForm, video_url: files[0]?.url || "" })}
-                      description="Upload lesson video (max 500MB)"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary mb-1">Duration (minutes)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={lessonForm.duration_minutes}
-                      onChange={(e) => setLessonForm({ ...lessonForm, duration_minutes: parseInt(e.target.value) || 0 })}
-                      className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-                    />
-                  </div>
-                </>
-              )}
+             {editingLessonId && (
+  <>
+    <div>
+      {lessonForm.type === "video" && (
+        <>
+          <label className="block text-sm font-medium text-text-secondary mb-1">Video</label>
+          <Dropzone
+            variant="compact"
+            maxFiles={1}
+            maxSize={500 * 1024 * 1024}
+            accept={{ "video/*": [".mp4", ".webm", ".mov"] }}
+            value={lessonForm.video_url ? [{ url: lessonForm.video_url, name: "video", size: 0, type: "video/mp4" } as UploadedFile] : []}
+            onFilesChange={(files) => setLessonForm({ ...lessonForm, video_url: files[0]?.url || "" })}
+            description="Upload lesson video (max 500MB)"
+          />
+        </>
+      )}
+      {lessonForm.type === "pdf" && (
+        <>
+          <label className="block text-sm font-medium text-text-secondary mb-1">PDF File</label>
+          <Dropzone
+            variant="compact"
+            maxFiles={1}
+            maxSize={50 * 1024 * 1024}
+            accept={{ "application/pdf": [".pdf"] }}
+            value={lessonForm.video_url ? [{ url: lessonForm.video_url, name: "document", size: 0, type: "application/pdf" } as UploadedFile] : []}
+            onFilesChange={(files) => setLessonForm({ ...lessonForm, video_url: files[0]?.url || "" })}
+            description="Upload PDF file (max 50MB)"
+          />
+        </>
+      )}
+      {lessonForm.type === "audio" && (
+        <>
+          <label className="block text-sm font-medium text-text-secondary mb-1">Audio File</label>
+          <Dropzone
+            variant="compact"
+            maxFiles={1}
+            maxSize={100 * 1024 * 1024}
+            accept={{ "audio/*": [".mp3", ".wav", ".ogg", ".m4a"] }}
+            value={lessonForm.video_url ? [{ url: lessonForm.video_url, name: "audio", size: 0, type: "audio/mpeg" } as UploadedFile] : []}
+            onFilesChange={(files) => setLessonForm({ ...lessonForm, video_url: files[0]?.url || "" })}
+            description="Upload audio file (max 100MB)"
+          />
+        </>
+      )}
+      {lessonForm.type === "embed" && (
+        <>
+          <label className="block text-sm font-medium text-text-secondary mb-1">Embed URL</label>
+          <input
+            type="url"
+            value={lessonForm.video_url}
+            onChange={(e) => setLessonForm({ ...lessonForm, video_url: e.target.value })}
+            placeholder="https://www.youtube.com/embed/..."
+            className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+          />
+        </>
+      )}
+  
 
               <div className="flex items-center gap-3">
                 <button
