@@ -947,6 +947,20 @@ export default function CourseEditorPage() {
           />
         </>
       )}
+    </div>
+
+    <div>
+      <label className="block text-sm font-medium text-text-secondary mb-1">Duration (minutes)</label>
+      <input
+        type="number"
+        min={0}
+        value={lessonForm.duration_minutes}
+        onChange={(e) => setLessonForm({ ...lessonForm, duration_minutes: parseInt(e.target.value) || 0 })}
+        className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+      />
+    </div>
+  </>
+)}
   
 
               <div className="flex items-center gap-3">
