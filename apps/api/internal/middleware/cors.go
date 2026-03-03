@@ -16,7 +16,7 @@ func CORS(allowedOrigins []string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
 
-		if originsMap[origin] {
+		if originsMap["*"] || originsMap[origin] {
 			c.Header("Access-Control-Allow-Origin", origin)
 		}
 
