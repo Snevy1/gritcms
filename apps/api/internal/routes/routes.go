@@ -10,6 +10,7 @@ import (
 	"github.com/MUKE-coder/gin-docs/gindocs"
 	"github.com/MUKE-coder/gorm-studio/studio"
 	"github.com/MUKE-coder/pulse/pulse"
+	"github.com/MUKE-coder/sentinel"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
@@ -54,38 +55,41 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 	r.MaxMultipartMemory = 50 << 20
 
 	// Mount Sentinel security suite (WAF, rate limiting, auth shield, anomaly detection)
-	// if cfg.SentinelEnabled {
-	// 	sentinel.Mount(r, db, sentinel.Config{
-	// 		Dashboard: sentinel.DashboardConfig{
-	// 			Username:  cfg.SentinelUsername,
-	// 			Password:  cfg.SentinelPassword,
-	// 			SecretKey: cfg.SentinelSecretKey,
-	// 		},
-	// 		WAF: sentinel.WAFConfig{
-	// 			Enabled: true,
-	// 			Mode:    sentinel.ModeLog, // Switch to sentinel.ModeBlock in production
-	// 		},
-	// 		RateLimit: sentinel.RateLimitConfig{
-	// 			Enabled: true,
-	// 			ByIP:    &sentinel.Limit{Requests: 100, Window: 1 * time.Minute},
-	// 			ByRoute: map[string]sentinel.Limit{
-	// 				"/api/auth/login":    {Requests: 5, Window: 15 * time.Minute},
-	// 				"/api/auth/register": {Requests: 3, Window: 15 * time.Minute},
-	// 			},
-	// 		},
-	// 		AuthShield: sentinel.AuthShieldConfig{
-	// 			Enabled:    true,
-	// 			LoginRoute: "/api/auth/login",
-	// 		},
-	// 		Anomaly: sentinel.AnomalyConfig{
-	// 			Enabled: true,
-	// 		},
-	// 		Geo: sentinel.GeoConfig{
-	// 			Enabled: true,
-	// 		},
-	// 	})
-	// 	log.Println("Sentinel security suite mounted at /sentinel")
-	// }
+	excludedRoutes := []string{"/pulse/*", "/studio/*", "/sentinel/*", "/docs/*", "/api/health"}
+	if cfg.SentinelEnabled {
+		sentinel.Mount(r, db, sentinel.Config{
+			Dashboard: sentinel.DashboardConfig{
+				Username:  cfg.SentinelUsername,
+				Password:  cfg.SentinelPassword,
+				SecretKey: cfg.SentinelSecretKey,
+			},
+			WAF: sentinel.WAFConfig{
+				Enabled:       true,
+				Mode:          sentinel.ModeBlock,
+				ExcludeRoutes: excludedRoutes,
+			},
+			RateLimit: sentinel.RateLimitConfig{
+				Enabled: true,
+				ByIP:    &sentinel.Limit{Requests: 100, Window: 1 * time.Minute},
+				ByRoute: map[string]sentinel.Limit{
+					"/api/auth/login":    {Requests: 5, Window: 15 * time.Minute},
+					"/api/auth/register": {Requests: 3, Window: 15 * time.Minute},
+				},
+				ExcludeRoutes: excludedRoutes,
+			},
+			AuthShield: sentinel.AuthShieldConfig{
+				Enabled:    true,
+				LoginRoute: "/api/auth/login",
+			},
+			Anomaly: sentinel.AnomalyConfig{
+				Enabled: true,
+			},
+			Geo: sentinel.GeoConfig{
+				Enabled: true,
+			},
+		})
+		log.Println("Sentinel security suite mounted at /sentinel")
+	}
 
 	// Mount GORM Studio
 	if cfg.GORMStudioEnabled {
@@ -186,7 +190,7 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 	settingHandler := handlers.NewSettingHandler(db)
 	emailHandler := handlers.NewEmailHandler(db, svc.Jobs)
 	courseHandler := handlers.NewCourseHandler(db)
-	commerceHandler := handlers.NewCommerceHandler(db)
+	commerceHandler := handlers.NewCommerceHandler(db, svc.Cache)
 	analyticsHandler := handlers.NewAnalyticsHandler(db)
 	communityHandler := handlers.NewCommunityHandler(db)
 	funnelHandler := handlers.NewFunnelHandler(db)
@@ -321,6 +325,10 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 			student.GET("/courses/:id", courseHandler.StudentGetCourse)
 			student.POST("/courses/:id/enroll", courseHandler.StudentEnroll)
 			student.POST("/courses/:id/lessons/:lessonId/complete", courseHandler.StudentMarkLessonComplete)
+
+			// Purchases
+			student.GET("/purchases", commerceHandler.StudentGetPurchases)
+			student.GET("/purchases/:orderId", commerceHandler.StudentGetPurchase)
 		}
 
 		// Checkout (any authenticated user)
@@ -487,6 +495,7 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 		admin.GET("/email/dashboard", emailHandler.DashboardStats)
 
 		// Course management (admin)
+		admin.GET("/courses/dashboard", courseHandler.CourseDashboard)
 		admin.GET("/courses", courseHandler.ListCourses)
 		admin.GET("/courses/:id", courseHandler.GetCourse)
 		admin.POST("/courses", courseHandler.CreateCourse)

@@ -14,18 +14,27 @@ import (
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
+	"gritcms/apps/api/internal/cache"
 	"gritcms/apps/api/internal/events"
 	"gritcms/apps/api/internal/models"
 )
 
 // CommerceHandler handles all commerce-related endpoints.
 type CommerceHandler struct {
-	db *gorm.DB
+	db    *gorm.DB
+	cache *cache.Cache
 }
 
 // NewCommerceHandler creates a new CommerceHandler.
-func NewCommerceHandler(db *gorm.DB) *CommerceHandler {
-	return &CommerceHandler{db: db}
+func NewCommerceHandler(db *gorm.DB, cache *cache.Cache) *CommerceHandler {
+	return &CommerceHandler{db: db, cache: cache}
+}
+
+// invalidateProductCache clears cached public product pages.
+func (h *CommerceHandler) invalidateProductCache(c *gin.Context) {
+	if h.cache != nil {
+		_ = h.cache.DeletePattern(c.Request.Context(), "http:*")
+	}
 }
 
 // ===================== PRODUCTS =====================
@@ -143,6 +152,7 @@ func (h *CommerceHandler) UpdateProduct(c *gin.Context) {
 	}
 
 	h.db.Preload("Prices").Preload("Variants").First(&product, id)
+	h.invalidateProductCache(c)
 	c.JSON(http.StatusOK, gin.H{"data": product})
 }
 
@@ -369,9 +379,10 @@ func (h *CommerceHandler) CreateOrder(c *gin.Context) {
 		total := unitPrice * float64(qty)
 		subtotal += total
 
+		pid := item.ProductID
 		orderItems = append(orderItems, models.OrderItem{
 			TenantID:  1,
-			ProductID: item.ProductID,
+			ProductID: &pid,
 			PriceID:   item.PriceID,
 			VariantID: item.VariantID,
 			Quantity:  qty,
@@ -467,24 +478,41 @@ func (h *CommerceHandler) UpdateOrderStatus(c *gin.Context) {
 
 		// Fulfill: auto-enroll in linked courses
 		for _, item := range order.Items {
-			var product models.Product
-			if err := h.db.First(&product, item.ProductID).Error; err == nil {
-				if product.Type == models.ProductTypeCourse {
-					// Find courses linked to this product
-					var courses []models.Course
-					h.db.Where("product_id = ?", product.ID).Find(&courses)
-					for _, course := range courses {
-						enrollment := models.CourseEnrollment{
-							TenantID:  1,
-							ContactID: order.ContactID,
-							CourseID:  course.ID,
-							Status:    "active",
-							Source:    "purchase",
+			// Direct course purchase
+			if item.CourseID != nil {
+				enrollment := models.CourseEnrollment{
+					TenantID:  1,
+					ContactID: order.ContactID,
+					CourseID:  *item.CourseID,
+					Status:    "active",
+					Source:    "purchase",
+				}
+				h.db.FirstOrCreate(&enrollment, models.CourseEnrollment{
+					ContactID: order.ContactID,
+					CourseID:  *item.CourseID,
+				})
+				continue
+			}
+			// Legacy: product-type-course linkage
+			if item.ProductID != nil {
+				var product models.Product
+				if err := h.db.First(&product, *item.ProductID).Error; err == nil {
+					if product.Type == models.ProductTypeCourse {
+						var courses []models.Course
+						h.db.Where("product_id = ?", product.ID).Find(&courses)
+						for _, course := range courses {
+							enrollment := models.CourseEnrollment{
+								TenantID:  1,
+								ContactID: order.ContactID,
+								CourseID:  course.ID,
+								Status:    "active",
+								Source:    "purchase",
+							}
+							h.db.FirstOrCreate(&enrollment, models.CourseEnrollment{
+								ContactID: order.ContactID,
+								CourseID:  course.ID,
+							})
 						}
-						h.db.FirstOrCreate(&enrollment, models.CourseEnrollment{
-							ContactID: order.ContactID,
-							CourseID:  course.ID,
-						})
 					}
 				}
 			}
@@ -807,6 +835,72 @@ func (h *CommerceHandler) GetPublicProduct(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": product})
+}
+
+// ===================== STUDENT PURCHASES =====================
+
+// StudentGetPurchases returns all paid orders for the authenticated user.
+func (h *CommerceHandler) StudentGetPurchases(c *gin.Context) {
+	user, _ := c.Get("user")
+	u := user.(models.User)
+
+	var contact models.Contact
+	if err := h.db.Where("email = ? AND tenant_id = ?", u.Email, 1).First(&contact).Error; err != nil {
+		c.JSON(http.StatusOK, gin.H{"data": []interface{}{}})
+		return
+	}
+
+	// Only return orders that have at least one product item (exclude course-only orders)
+	var orders []models.Order
+	h.db.Where("contact_id = ? AND status = ? AND id IN (?)",
+		contact.ID, models.OrderStatusPaid,
+		h.db.Model(&models.OrderItem{}).Select("order_id").Where("product_id IS NOT NULL"),
+	).
+		Preload("Items.Product").
+		Order("paid_at DESC").
+		Find(&orders)
+
+	result := make([]gin.H, 0, len(orders))
+	for _, o := range orders {
+		// Filter items to only product items
+		var productItems []models.OrderItem
+		for _, item := range o.Items {
+			if item.ProductID != nil {
+				productItems = append(productItems, item)
+			}
+		}
+		result = append(result, gin.H{
+			"order": o,
+			"items": productItems,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"data": result})
+}
+
+// StudentGetPurchase returns a single paid order for the authenticated user.
+func (h *CommerceHandler) StudentGetPurchase(c *gin.Context) {
+	orderID := c.Param("orderId")
+	user, _ := c.Get("user")
+	u := user.(models.User)
+
+	var contact models.Contact
+	if err := h.db.Where("email = ? AND tenant_id = ?", u.Email, 1).First(&contact).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Contact not found"})
+		return
+	}
+
+	var order models.Order
+	if err := h.db.Where("id = ? AND contact_id = ? AND status = ?", orderID, contact.ID, models.OrderStatusPaid).
+		Preload("Items.Product").
+		First(&order).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Purchase not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{
+		"order": order,
+		"items": order.Items,
+	}})
 }
 
 // ===================== HELPERS =====================

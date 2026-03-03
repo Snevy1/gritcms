@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { useConfirm } from "@/hooks/use-confirm";
 import {
   ArrowLeft,
   Save,
@@ -89,6 +90,19 @@ function priceTypeBadge(type: string) {
   }
 }
 
+/** Extract a human-readable filename from an upload URL. */
+function fileNameFromURL(url: string): string {
+  try {
+    const path = new URL(url).pathname;
+    const filename = path.split("/").pop() || "file";
+    // Strip the leading timestamp prefix (e.g. "1234567890-")
+    const match = filename.match(/^\d+-(.+)$/);
+    return match ? decodeURIComponent(match[1]) : decodeURIComponent(filename);
+  } catch {
+    return url.split("/").pop() || "file";
+  }
+}
+
 function formatCurrency(amount: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -116,6 +130,7 @@ export default function ProductEditorPage() {
   const { mutate: createVariant } = useCreateVariant();
   const { mutate: updateVariant } = useUpdateVariant();
   const { mutate: deleteVariant } = useDeleteVariant();
+  const confirm = useConfirm();
 
   // Tab state
   const [activeTab, setActiveTab] = useState<Tab>("details");
@@ -198,8 +213,14 @@ export default function ProductEditorPage() {
     );
   };
 
-  const handleDeletePrice = (priceId: number) => {
-    if (confirm("Delete this price?")) {
+  const handleDeletePrice = async (priceId: number) => {
+    const ok = await confirm({
+      title: "Delete Price",
+      description: "Delete this price? This cannot be undone.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (ok) {
       deletePrice({ productId, priceId });
     }
   };
@@ -264,8 +285,14 @@ export default function ProductEditorPage() {
     }
   };
 
-  const handleDeleteVariant = (variantId: number) => {
-    if (confirm("Delete this variant?")) {
+  const handleDeleteVariant = async (variantId: number) => {
+    const ok = await confirm({
+      title: "Delete Variant",
+      description: "Delete this variant? This cannot be undone.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (ok) {
       deleteVariant({ productId, variantId });
     }
   };
@@ -449,7 +476,7 @@ export default function ProductEditorPage() {
                   maxFiles={10}
                   maxSize={5 * 1024 * 1024}
                   accept={{ "image/*": [".jpg", ".jpeg", ".png", ".gif", ".webp"] }}
-                  value={images.map((url, i) => ({ url, name: `image-${i + 1}`, size: 0, type: "image/jpeg" } as UploadedFile))}
+                  value={images.map((url) => ({ url, name: fileNameFromURL(url), size: 0, type: "image/jpeg" } as UploadedFile))}
                   onFilesChange={(files) => setImages(files.map((f) => f.url))}
                   description="Upload up to 10 product images (max 5MB each)"
                 />

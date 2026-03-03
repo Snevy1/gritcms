@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useConfirm } from "@/hooks/use-confirm";
 import {
   useCourses,
   useDeleteCourse,
   useDuplicateCourse,
   useCreateCourse,
+  useCourseDashboard,
 } from "@/hooks/use-courses";
 import {
   Plus,
@@ -16,6 +18,10 @@ import {
   Loader2,
   X,
   Image,
+  BookOpen,
+  Users,
+  DollarSign,
+  TrendingUp,
 } from "@/lib/icons";
 import type { Course } from "@repo/shared/types";
 
@@ -48,6 +54,15 @@ function formatPrice(price: number, currency: string) {
   }).format(price / 100);
 }
 
+function formatCurrency(amount: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(amount / 100);
+}
+
 export default function CoursesPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("");
@@ -68,9 +83,42 @@ export default function CoursesPage() {
     search: search || undefined,
   });
 
+  const confirm = useConfirm();
   const { mutate: deleteCourse } = useDeleteCourse();
   const { mutate: duplicateCourse } = useDuplicateCourse();
   const { mutate: createCourse } = useCreateCourse();
+  const { data: dashboard } = useCourseDashboard();
+
+  const stats = [
+    {
+      label: "Course Revenue",
+      value: dashboard ? formatCurrency(dashboard.course_revenue) : "--",
+      icon: DollarSign,
+      color: "text-success",
+      bg: "bg-success/10",
+    },
+    {
+      label: "Total Enrollments",
+      value: dashboard?.total_enrollments ?? "--",
+      icon: Users,
+      color: "text-accent",
+      bg: "bg-accent/10",
+    },
+    {
+      label: "Published Courses",
+      value: dashboard?.published_courses ?? "--",
+      icon: BookOpen,
+      color: "text-warning",
+      bg: "bg-warning/10",
+    },
+    {
+      label: "Monthly Revenue",
+      value: dashboard ? formatCurrency(dashboard.monthly_revenue) : "--",
+      icon: TrendingUp,
+      color: "text-purple-400",
+      bg: "bg-purple-500/10",
+    },
+  ];
 
   const courses = data?.data ?? [];
   const meta = data?.meta;
@@ -107,6 +155,26 @@ export default function CoursesPage() {
 
   return (
     <div className="space-y-6">
+      {/* Stats Row */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map((stat) => (
+          <div
+            key={stat.label}
+            className="rounded-xl border border-border bg-bg-secondary p-4"
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-text-muted">{stat.label}</p>
+              <div className={`rounded-lg p-2 ${stat.bg}`}>
+                <stat.icon className={`h-4 w-4 ${stat.color}`} />
+              </div>
+            </div>
+            <p className="mt-2 text-2xl font-bold text-foreground">
+              {stat.value}
+            </p>
+          </div>
+        ))}
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -378,9 +446,9 @@ export default function CoursesPage() {
                         <Pencil className="h-4 w-4" />
                       </Link>
                       <button
-                        onClick={() => {
-                          if (confirm("Duplicate this course?"))
-                            duplicateCourse(course.id);
+                        onClick={async () => {
+                          const ok = await confirm({ title: "Duplicate Course", description: "Create a copy of this course?", confirmLabel: "Duplicate" });
+                          if (ok) duplicateCourse(course.id);
                         }}
                         className="rounded-lg p-1.5 text-text-muted hover:bg-bg-hover hover:text-foreground"
                         title="Duplicate"
@@ -388,9 +456,9 @@ export default function CoursesPage() {
                         <Plus className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={() => {
-                          if (confirm("Delete this course? This cannot be undone."))
-                            deleteCourse(course.id);
+                        onClick={async () => {
+                          const ok = await confirm({ title: "Delete Course", description: "Delete this course? This cannot be undone.", confirmLabel: "Delete", variant: "danger" });
+                          if (ok) deleteCourse(course.id);
                         }}
                         className="rounded-lg p-1.5 text-text-muted hover:bg-danger/10 hover:text-danger"
                         title="Delete"
