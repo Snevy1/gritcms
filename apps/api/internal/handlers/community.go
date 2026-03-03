@@ -559,3 +559,145 @@ func generateSpaceSlug(name string) string {
 	}
 	return strings.Trim(slug, "-")
 }
+
+// ===================== STUDENT (AUTHENTICATED) =====================
+
+func (h *CommunityHandler) GetUserContact(c *gin.Context) (*models.Contact, bool) {
+	userObj, exists := c.Get("user")
+	if !exists {
+		return nil, false
+	}
+	u, ok := userObj.(models.User)
+	if !ok {
+		return nil, false
+	}
+	
+	var contact models.Contact
+	if err := h.db.Where("email = ? AND tenant_id = ?", u.Email, 1).First(&contact).Error; err != nil {
+		contact = models.Contact{
+			TenantID:  1,
+			Email:     u.Email,
+			FirstName: u.FirstName,
+			LastName:  u.LastName,
+			Source:    "community",
+			UserID:    &u.ID,
+		}
+		if err := h.db.Create(&contact).Error; err != nil {
+			return nil, false
+		}
+	} else if contact.UserID == nil {
+		h.db.Model(&contact).Update("user_id", u.ID)
+	}
+	return &contact, true
+}
+
+func (h *CommunityHandler) StudentCreateThread(c *gin.Context) {
+	spaceID, _ := strconv.Atoi(c.Param("id"))
+	contact, ok := h.GetUserContact(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	var thread models.Thread
+	if err := c.ShouldBindJSON(&thread); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	thread.TenantID = 1
+	thread.SpaceID = uint(spaceID)
+	thread.AuthorID = contact.ID
+	thread.LastActivityAt = time.Now()
+	if thread.Type == "" {
+		thread.Type = models.ThreadTypeDiscussion
+	}
+	if thread.Status == "" {
+		thread.Status = models.ThreadStatusOpen
+	}
+	if err := h.db.Create(&thread).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create thread"})
+		return
+	}
+	h.db.Preload("Author").First(&thread, thread.ID)
+	c.JSON(http.StatusCreated, gin.H{"data": thread})
+}
+
+func (h *CommunityHandler) StudentCreateReply(c *gin.Context) {
+	threadID, _ := strconv.Atoi(c.Param("threadId"))
+	contact, ok := h.GetUserContact(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	var reply models.Reply
+	if err := c.ShouldBindJSON(&reply); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	reply.TenantID = 1
+	reply.ThreadID = uint(threadID)
+	reply.AuthorID = contact.ID
+	if err := h.db.Create(&reply).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create reply"})
+		return
+	}
+	// Update thread
+	h.db.Model(&models.Thread{}).Where("id = ?", threadID).Updates(map[string]interface{}{
+		"reply_count":      gorm.Expr("reply_count + 1"),
+		"last_activity_at": time.Now(),
+	})
+	h.db.Preload("Author").First(&reply, reply.ID)
+	c.JSON(http.StatusCreated, gin.H{"data": reply})
+}
+
+func (h *CommunityHandler) StudentToggleReaction(c *gin.Context) {
+	contact, ok := h.GetUserContact(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	var input struct {
+		ReactableType string `json:"reactable_type" binding:"required"` // thread, reply
+		ReactableID   uint   `json:"reactable_id" binding:"required"`
+		Type          string `json:"type"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if input.Type == "" {
+		input.Type = "like"
+	}
+
+	var existing models.Reaction
+	result := h.db.Where("reactable_type = ? AND reactable_id = ? AND contact_id = ? AND type = ?",
+		input.ReactableType, input.ReactableID, contact.ID, input.Type).First(&existing)
+
+	if result.Error == nil {
+		h.db.Delete(&existing)
+		if input.ReactableType == "thread" {
+			h.db.Model(&models.Thread{}).Where("id = ?", input.ReactableID).UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - 1, 0)"))
+		} else {
+			h.db.Model(&models.Reply{}).Where("id = ?", input.ReactableID).UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - 1, 0)"))
+		}
+		c.JSON(http.StatusOK, gin.H{"action": "removed"})
+		return
+	}
+
+	reaction := models.Reaction{
+		TenantID:      1,
+		ReactableType: input.ReactableType,
+		ReactableID:   input.ReactableID,
+		ContactID:     contact.ID,
+		Type:          input.Type,
+	}
+	h.db.Create(&reaction)
+	if input.ReactableType == "thread" {
+		h.db.Model(&models.Thread{}).Where("id = ?", input.ReactableID).UpdateColumn("like_count", gorm.Expr("like_count + 1"))
+	} else {
+		h.db.Model(&models.Reply{}).Where("id = ?", input.ReactableID).UpdateColumn("like_count", gorm.Expr("like_count + 1"))
+	}
+	c.JSON(http.StatusOK, gin.H{"action": "added", "data": reaction})
+}
