@@ -44,10 +44,11 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 	r := gin.New()
 
 	// Global middleware
+	r.Use(middleware.CORS(cfg.CORSOrigins))
 	r.Use(middleware.Logger())
 	r.Use(gin.Recovery())
 	log.Printf("[CORS] Allowed origins: %v", cfg.CORSOrigins)
-	r.Use(middleware.CORS(cfg.CORSOrigins))
+	
 	r.Use(middleware.SecurityHeaders())
 
 	// Max memory for multipart form parsing (excess goes to temp files)
@@ -616,7 +617,7 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 		admin.DELETE("/community/replies/:replyId", communityHandler.DeleteReply)
 
 		// Reactions (admin)
-		admin.POST("/community/reactions", communityHandler.ToggleReaction)
+		admin.POST("/admin/community/reactions", communityHandler.ToggleReaction)
 
 		// Events (admin)
 		admin.GET("/community/events", communityHandler.ListEvents)
