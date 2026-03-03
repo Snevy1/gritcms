@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
-import type { Space, Thread, Reply, Reaction } from "@repo/shared/types";
+import type { Space, Thread, ThreadReply, Reaction } from "@repo/shared/types";
 
 export function usePublicSpaces() {
   return useQuery({
@@ -68,9 +68,9 @@ export function useCreateThread() {
 export function useCreateReply() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ threadId, ...body }: Partial<Reply> & { threadId: number }) => {
+    mutationFn: async ({ threadId, ...body }: Partial<ThreadReply> & { threadId: number }) => {
       const { data } = await api.post(`/api/community/threads/${threadId}/replies`, body);
-      return data.data as Reply;
+      return data.data as ThreadReply;
     },
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ["community", "thread", vars.threadId] });
