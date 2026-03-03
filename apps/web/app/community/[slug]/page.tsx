@@ -254,9 +254,8 @@ export default function SpaceDetailPage() {
                 href={`/community/${slug}/thread/${thread.id}`}
                 className="group block rounded-xl border border-border bg-bg-elevated p-4 sm:p-5 hover:border-accent/60 hover:bg-bg-hover transition-colors"
               >
-                {/* Title */}
                 <h3 className="text-sm sm:text-base font-semibold text-foreground group-hover:text-accent transition-colors leading-snug mb-1.5">
-                  {thread.title}
+                  {String(thread.title)}
                 </h3>
 
                 {/* Excerpt */}
