@@ -131,7 +131,7 @@ export default function ThreadDetailPage() {
                 </div>
 
                 {/* Thread content */}
-                {thread.content && (
+                {!!thread.content && (
                     <div className="text-sm sm:text-base text-text-secondary whitespace-pre-wrap leading-relaxed mb-6">
                         {typeof thread.content === "string"
                             ? thread.content

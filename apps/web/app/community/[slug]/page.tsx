@@ -259,7 +259,7 @@ export default function SpaceDetailPage() {
                 </h3>
 
                 {/* Excerpt */}
-                {thread.content && (
+                {!!thread.content && (
                   <p className="text-xs sm:text-sm text-text-muted line-clamp-2 mb-3 leading-relaxed">
                     {typeof thread.content === "string" ? thread.content : "..."}
                   </p>
