@@ -104,7 +104,7 @@ func Load() (*Config, error) {
 		ResendAPIKey: getEnv("RESEND_API_KEY", ""),
 		MailFrom:     getEnv("MAIL_FROM", "noreply@localhost"),
 
-		CORSOrigins: trimSlice(strings.Split(getEnv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001"), ",")),
+		CORSOrigins: trimSlice(strings.Split(getEnv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,https://vilyo.shop,https://api.vilyo.shop"), ",")),
 
 		GORMStudioEnabled:  getEnv("GORM_STUDIO_ENABLED", "true") == "true",
 		GORMStudioUsername: getEnv("GORM_STUDIO_USERNAME", "admin"),
