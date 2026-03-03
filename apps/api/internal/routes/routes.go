@@ -606,16 +606,12 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 		admin.PUT("/community/members/:memberId/role", communityHandler.UpdateMemberRole)
 
 		// Threads (admin)
-		admin.GET("/community/spaces/:id/threads", communityHandler.ListThreads)
-		admin.GET("/community/threads/:threadId", communityHandler.GetThread)
-		admin.POST("/community/spaces/:id/threads", communityHandler.CreateThread)
 		admin.PUT("/community/threads/:threadId", communityHandler.UpdateThread)
 		admin.DELETE("/community/threads/:threadId", communityHandler.DeleteThread)
 		admin.POST("/community/threads/:threadId/pin", communityHandler.PinThread)
 		admin.POST("/community/threads/:threadId/close", communityHandler.CloseThread)
 
 		// Replies (admin)
-		admin.POST("/community/threads/:threadId/replies", communityHandler.CreateReply)
 		admin.PUT("/community/replies/:replyId", communityHandler.UpdateReply)
 		admin.DELETE("/community/replies/:replyId", communityHandler.DeleteReply)
 
