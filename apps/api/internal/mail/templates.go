@@ -2,10 +2,11 @@ package mail
 
 // EmailTemplates contains all available email templates.
 var EmailTemplates = map[string]string{
-	"welcome":            welcomeTemplate,
-	"password-reset":     passwordResetTemplate,
-	"email-verification": emailVerificationTemplate,
-	"notification":       notificationTemplate,
+	"welcome":              welcomeTemplate,
+	"password-reset":       passwordResetTemplate,
+	"email-verification":   emailVerificationTemplate,
+	"notification":         notificationTemplate,
+	"subscription-confirm": subscriptionConfirmTemplate,
 }
 
 const baseLayout = `<!DOCTYPE html>
@@ -168,6 +169,41 @@ const notificationTemplate = `<!DOCTYPE html>
         <a href="{{.ActionURL}}" class="btn">{{.ActionText}}</a>
       </p>
       {{end}}
+    </div>
+    <div class="footer">
+      <p>&copy; {{.Year}} {{.AppName}}. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>`
+
+const subscriptionConfirmTemplate = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { margin: 0; padding: 0; background-color: #0a0a0f; color: #e8e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .container { max-width: 600px; margin: 0 auto; padding: 40px 20px; }
+    .card { background-color: #111118; border: 1px solid #2a2a3a; border-radius: 12px; padding: 32px; }
+    .logo { text-align: center; margin-bottom: 24px; font-size: 24px; font-weight: 700; color: #6c5ce7; }
+    h1 { font-size: 20px; margin: 0 0 16px; color: #e8e8f0; }
+    p { font-size: 14px; line-height: 1.6; color: #9090a8; margin: 0 0 16px; }
+    .btn { display: inline-block; background-color: #6c5ce7; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; }
+    .footer { text-align: center; margin-top: 24px; font-size: 12px; color: #606078; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="logo">{{.AppName}}</div>
+      <h1>Confirm Your Subscription</h1>
+      <p>Hi{{if .FirstName}} {{.FirstName}}{{end}},</p>
+      <p>You've requested to subscribe to <strong style="color: #e8e8f0;">{{.ListName}}</strong>. Please confirm your subscription by clicking the button below:</p>
+      <p style="text-align: center; margin: 24px 0;">
+        <a href="{{.ConfirmURL}}" class="btn">Confirm Subscription</a>
+      </p>
+      <p>If you didn't request this, you can safely ignore this email.</p>
     </div>
     <div class="footer">
       <p>&copy; {{.Year}} {{.AppName}}. All rights reserved.</p>

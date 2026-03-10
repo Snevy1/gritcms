@@ -16,6 +16,7 @@ import (
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
+	"gritcms/apps/api/internal/config"
 	"gritcms/apps/api/internal/events"
 	"gritcms/apps/api/internal/jobs"
 	"gritcms/apps/api/internal/models"
@@ -24,10 +25,11 @@ import (
 type EmailHandler struct {
 	DB   *gorm.DB
 	Jobs *jobs.Client
+	Cfg  *config.Config
 }
 
-func NewEmailHandler(db *gorm.DB, jobClient *jobs.Client) *EmailHandler {
-	return &EmailHandler{DB: db, Jobs: jobClient}
+func NewEmailHandler(db *gorm.DB, jobClient *jobs.Client, cfg *config.Config) *EmailHandler {
+	return &EmailHandler{DB: db, Jobs: jobClient, Cfg: cfg}
 }
 
 // ===== Email Lists =====
@@ -214,6 +216,18 @@ func (h *EmailHandler) Subscribe(c *gin.Context) {
 
 	if sub.Status == models.SubStatusActive {
 		events.Emit(events.EmailSubscribed, sub)
+	}
+
+	// Send double opt-in confirmation email
+	if list.DoubleOptin && h.Jobs != nil {
+		confirmURL := fmt.Sprintf("%s/email/confirm/%s", strings.TrimRight(h.Cfg.WebURL, "/"), sub.ConfirmToken)
+		_ = h.Jobs.EnqueueSendEmail(body.Email, "Confirm your subscription", "subscription-confirm", map[string]interface{}{
+			"ConfirmURL": confirmURL,
+			"ListName":   list.Name,
+			"FirstName":  contact.FirstName,
+			"AppName":    h.Cfg.AppName,
+			"Year":       time.Now().Year(),
+		})
 	}
 
 	msg := "Subscribed successfully"
