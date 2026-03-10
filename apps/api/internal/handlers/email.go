@@ -632,7 +632,10 @@ func (h *EmailHandler) CreateCampaign(c *gin.Context) {
 	body.TenantID = 1
 	body.Status = models.CampaignStatusDraft
 	body.Stats = datatypes.JSON([]byte(`{"sent":0,"delivered":0,"opened":0,"clicked":0,"bounced":0,"unsubscribed":0}`))
-	h.DB.Create(&body)
+	if err := h.DB.Create(&body).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create campaign: " + err.Error()})
+		return
+	}
 	c.JSON(http.StatusCreated, gin.H{"data": body})
 }
 

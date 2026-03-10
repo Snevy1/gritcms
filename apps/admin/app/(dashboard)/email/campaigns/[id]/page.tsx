@@ -16,7 +16,7 @@ import {
 } from "@/hooks/use-email";
 import { ChevronLeft, Save, Loader2, Play, Send } from "@/lib/icons";
 import { useConfirm } from "@/hooks/use-confirm";
-import { RichTextField } from "@/components/forms/fields/rich-text-field";
+import { EmailEditor } from "@/components/email-editor";
 
 const statusBadge: Record<string, string> = {
   draft: "bg-bg-elevated text-text-muted",
@@ -269,10 +269,10 @@ export default function CampaignEditorPage() {
                 dangerouslySetInnerHTML={{ __html: htmlContent }}
               />
             ) : (
-              <RichTextField
-                field={{ key: "html_content", label: "Email Content", placeholder: "Write your email content here..." }}
+              <EmailEditor
                 value={htmlContent}
                 onChange={setHtmlContent}
+                placeholder="Write your email content here... Use the toolbar to add headings, images, YouTube videos, CTA buttons, and more."
               />
             )}
           </div>
@@ -405,41 +405,48 @@ export default function CampaignEditorPage() {
             )}
           </div>
 
+          {/* Test email - shown for saved campaigns */}
+          {!isReadOnly && !isNew && (
+            <div className="rounded-xl border border-border bg-bg-secondary p-6 space-y-3">
+              <h3 className="text-sm font-semibold text-foreground">Test Email</h3>
+              <p className="text-xs text-text-muted">Preview how your email looks before sending to subscribers.</p>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={testEmail}
+                  onChange={(e) => setTestEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  className="flex-1 rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-sm text-foreground focus:border-accent focus:outline-none"
+                />
+                <button
+                  onClick={() => sendTestEmail({ id, email: testEmail })}
+                  disabled={!testEmail || isSendingTest}
+                  className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-bg-hover disabled:opacity-50"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  {isSendingTest ? "Sending..." : "Send Test"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* New campaign hint */}
+          {isNew && (
+            <div className="rounded-xl border border-dashed border-border bg-bg-secondary/50 p-6 space-y-2">
+              <h3 className="text-sm font-semibold text-text-muted">How it works</h3>
+              <ol className="text-xs text-text-muted space-y-1.5 list-decimal list-inside">
+                <li>Fill in your campaign details and write your email content</li>
+                <li>Click <strong className="text-text-secondary">Save as Draft</strong> to save</li>
+                <li>Send a <strong className="text-text-secondary">Test Email</strong> to preview</li>
+                <li>Click <strong className="text-text-secondary">Send Now</strong> to deliver to subscribers</li>
+              </ol>
+            </div>
+          )}
+
           {/* Schedule / Send controls */}
           {!isReadOnly && !isNew && (
             <div className="rounded-xl border border-border bg-bg-secondary p-6 space-y-4">
-              <h3 className="text-sm font-semibold text-foreground">Send</h3>
-
-              {/* Test email */}
-              <div className="space-y-2">
-                <label className="block text-xs font-medium text-text-muted">Send Test Email</label>
-                <div className="flex gap-2">
-                  <input
-                    type="email"
-                    value={testEmail}
-                    onChange={(e) => setTestEmail(e.target.value)}
-                    placeholder="test@example.com"
-                    className="flex-1 rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-sm text-foreground focus:border-accent focus:outline-none"
-                  />
-                  <button
-                    onClick={() => sendTestEmail({ id, email: testEmail })}
-                    disabled={!testEmail || isSendingTest}
-                    className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-bg-hover disabled:opacity-50"
-                  >
-                    <Send className="h-3.5 w-3.5" />
-                    {isSendingTest ? "..." : "Test"}
-                  </button>
-                </div>
-              </div>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-border" />
-                </div>
-                <div className="relative flex justify-center">
-                  <span className="bg-bg-secondary px-2 text-xs text-text-muted">send to all</span>
-                </div>
-              </div>
+              <h3 className="text-sm font-semibold text-foreground">Send to Subscribers</h3>
 
               <button
                 onClick={handleSendNow}
@@ -455,14 +462,11 @@ export default function CampaignEditorPage() {
                   <span className="w-full border-t border-border" />
                 </div>
                 <div className="relative flex justify-center">
-                  <span className="bg-bg-secondary px-2 text-xs text-text-muted">or</span>
+                  <span className="bg-bg-secondary px-2 text-xs text-text-muted">or schedule</span>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-text-secondary">
-                  Schedule for
-                </label>
                 <input
                   type="datetime-local"
                   value={scheduledAt}
