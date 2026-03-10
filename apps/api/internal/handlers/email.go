@@ -19,17 +19,19 @@ import (
 	"gritcms/apps/api/internal/config"
 	"gritcms/apps/api/internal/events"
 	"gritcms/apps/api/internal/jobs"
+	"gritcms/apps/api/internal/mail"
 	"gritcms/apps/api/internal/models"
 )
 
 type EmailHandler struct {
-	DB   *gorm.DB
-	Jobs *jobs.Client
-	Cfg  *config.Config
+	DB     *gorm.DB
+	Jobs   *jobs.Client
+	Cfg    *config.Config
+	Mailer *mail.Mailer
 }
 
-func NewEmailHandler(db *gorm.DB, jobClient *jobs.Client, cfg *config.Config) *EmailHandler {
-	return &EmailHandler{DB: db, Jobs: jobClient, Cfg: cfg}
+func NewEmailHandler(db *gorm.DB, jobClient *jobs.Client, cfg *config.Config, mailer *mail.Mailer) *EmailHandler {
+	return &EmailHandler{DB: db, Jobs: jobClient, Cfg: cfg, Mailer: mailer}
 }
 
 // ===== Email Lists =====
@@ -1359,4 +1361,61 @@ func (h *EmailHandler) ExportSubscribers(c *gin.Context) {
 			subscribedAt + "\n"
 		c.Writer.WriteString(line)
 	}
+}
+
+// SendTestEmail sends a test email for a campaign to a single address.
+func (h *EmailHandler) SendTestEmail(c *gin.Context) {
+	if h.Mailer == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Mailer not configured"})
+		return
+	}
+
+	id, _ := strconv.Atoi(c.Param("id"))
+	var body struct {
+		Email string `json:"email" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Email is required"})
+		return
+	}
+
+	var campaign models.EmailCampaign
+	if err := h.DB.Preload("Template").First(&campaign, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Campaign not found"})
+		return
+	}
+
+	// Resolve HTML content (template > inline)
+	htmlContent := campaign.HTMLContent
+	if campaign.Template != nil && campaign.Template.HTMLContent != "" {
+		htmlContent = campaign.Template.HTMLContent
+	}
+	if htmlContent == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Campaign has no content"})
+		return
+	}
+
+	subject := campaign.Subject
+	if subject == "" && campaign.Template != nil {
+		subject = campaign.Template.Subject
+	}
+
+	from := ""
+	if campaign.FromName != "" && campaign.FromEmail != "" {
+		from = fmt.Sprintf("%s <%s>", campaign.FromName, campaign.FromEmail)
+	} else if campaign.FromEmail != "" {
+		from = campaign.FromEmail
+	}
+
+	_, err := h.Mailer.SendCampaignEmail(c.Request.Context(), mail.CampaignEmailOptions{
+		From:     from,
+		To:       body.Email,
+		Subject:  "[TEST] " + subject,
+		HTMLBody: htmlContent,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send test email: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Test email sent to " + body.Email})
 }

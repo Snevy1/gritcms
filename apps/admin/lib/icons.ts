@@ -108,6 +108,7 @@ import {
   Copy,
   Plug,
   Unplug,
+  Send,
   Type as TypeIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -285,5 +286,6 @@ export {
   Copy,
   Plug,
   Unplug,
+  Send,
   Server,
 };

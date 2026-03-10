@@ -188,7 +188,7 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 	postHandler := handlers.NewPostHandler(db)
 	menuHandler := handlers.NewMenuHandler(db)
 	settingHandler := handlers.NewSettingHandler(db)
-	emailHandler := handlers.NewEmailHandler(db, svc.Jobs, cfg)
+	emailHandler := handlers.NewEmailHandler(db, svc.Jobs, cfg, svc.Mailer)
 	courseHandler := handlers.NewCourseHandler(db)
 	commerceHandler := handlers.NewCommerceHandler(db, svc.Cache)
 	analyticsHandler := handlers.NewAnalyticsHandler(db)
@@ -464,6 +464,7 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 		admin.DELETE("/email/campaigns/:id", emailHandler.DeleteCampaign)
 		admin.POST("/email/campaigns/:id/duplicate", emailHandler.DuplicateCampaign)
 		admin.POST("/email/campaigns/:id/schedule", emailHandler.ScheduleCampaign)
+		admin.POST("/email/campaigns/:id/test", emailHandler.SendTestEmail)
 		admin.GET("/email/campaigns/:id/stats", emailHandler.GetCampaignStats)
 
 		// Email sequences (admin)

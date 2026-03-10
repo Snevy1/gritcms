@@ -584,6 +584,19 @@ export function useSegmentPreview(id: number) {
   });
 }
 
+// --- Test Email ---
+
+export function useSendTestEmail() {
+  return useMutation({
+    mutationFn: async ({ id, email }: { id: number; email: string }) => {
+      const { data } = await apiClient.post(`/api/email/campaigns/${id}/test`, { email });
+      return data;
+    },
+    onSuccess: () => toast.success("Test email sent!"),
+    onError: () => toast.error("Failed to send test email"),
+  });
+}
+
 // --- Email Sends ---
 
 interface SendListParams {

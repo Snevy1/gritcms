@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   useEmailCampaign,
@@ -12,9 +12,11 @@ import {
   useEmailTemplates,
   useEmailLists,
   useSegments,
+  useSendTestEmail,
 } from "@/hooks/use-email";
-import { ChevronLeft, Save, Loader2, Play } from "@/lib/icons";
+import { ChevronLeft, Save, Loader2, Play, Send } from "@/lib/icons";
 import { useConfirm } from "@/hooks/use-confirm";
+import { RichTextField } from "@/components/forms/fields/rich-text-field";
 
 const statusBadge: Record<string, string> = {
   draft: "bg-bg-elevated text-text-muted",
@@ -27,6 +29,7 @@ const statusBadge: Record<string, string> = {
 export default function CampaignEditorPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const isNew = params.id === "new";
   const id = isNew ? 0 : Number(params.id);
@@ -41,6 +44,7 @@ export default function CampaignEditorPage() {
   const { mutate: updateCampaign, isPending: isUpdating } = useUpdateEmailCampaign();
   const { mutate: createCampaign, isPending: isCreating } = useCreateEmailCampaign();
   const { mutate: scheduleCampaign, isPending: isScheduling } = useScheduleCampaign();
+  const { mutate: sendTestEmail, isPending: isSendingTest } = useSendTestEmail();
   const confirm = useConfirm();
 
   // --- Form state ---
@@ -54,7 +58,17 @@ export default function CampaignEditorPage() {
   const [selectedListIds, setSelectedListIds] = useState<number[]>([]);
   const [selectedSegmentIds, setSelectedSegmentIds] = useState<number[]>([]);
   const [scheduledAt, setScheduledAt] = useState("");
+  const [testEmail, setTestEmail] = useState("");
   const [initialized, setInitialized] = useState(false);
+
+  // Pre-select list from URL param (e.g. /email/campaigns/new?listId=5)
+  if (isNew && !initialized && !campaign) {
+    const preListId = searchParams.get("listId");
+    if (preListId) {
+      setSelectedListIds([Number(preListId)]);
+      setInitialized(true);
+    }
+  }
 
   // Populate form from fetched campaign
   if (campaign && !initialized) {
@@ -246,22 +260,21 @@ export default function CampaignEditorPage() {
             </div>
           </div>
 
-          {/* HTML Content */}
+          {/* Email Content */}
           <div className="rounded-xl border border-border bg-bg-secondary p-6 space-y-4">
             <h2 className="text-lg font-semibold text-foreground">Email Content</h2>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1">
-                HTML Content
-              </label>
-              <textarea
-                value={htmlContent}
-                onChange={(e) => setHtmlContent(e.target.value)}
-                disabled={isReadOnly}
-                rows={16}
-                placeholder="Paste or write your HTML email content here..."
-                className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm text-foreground font-mono focus:border-accent focus:outline-none disabled:opacity-60"
+            {isReadOnly ? (
+              <div
+                className="prose prose-sm max-w-none rounded-lg border border-border bg-bg-elevated p-4"
+                dangerouslySetInnerHTML={{ __html: htmlContent }}
               />
-            </div>
+            ) : (
+              <RichTextField
+                field={{ key: "html_content", label: "Email Content", placeholder: "Write your email content here..." }}
+                value={htmlContent}
+                onChange={setHtmlContent}
+              />
+            )}
           </div>
 
           {/* Stats (only for sent campaigns) */}
@@ -396,6 +409,37 @@ export default function CampaignEditorPage() {
           {!isReadOnly && !isNew && (
             <div className="rounded-xl border border-border bg-bg-secondary p-6 space-y-4">
               <h3 className="text-sm font-semibold text-foreground">Send</h3>
+
+              {/* Test email */}
+              <div className="space-y-2">
+                <label className="block text-xs font-medium text-text-muted">Send Test Email</label>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={testEmail}
+                    onChange={(e) => setTestEmail(e.target.value)}
+                    placeholder="test@example.com"
+                    className="flex-1 rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-sm text-foreground focus:border-accent focus:outline-none"
+                  />
+                  <button
+                    onClick={() => sendTestEmail({ id, email: testEmail })}
+                    disabled={!testEmail || isSendingTest}
+                    className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-bg-hover disabled:opacity-50"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    {isSendingTest ? "..." : "Test"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center">
+                  <span className="bg-bg-secondary px-2 text-xs text-text-muted">send to all</span>
+                </div>
+              </div>
 
               <button
                 onClick={handleSendNow}
