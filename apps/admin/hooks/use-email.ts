@@ -593,7 +593,10 @@ export function useSendTestEmail() {
       return data;
     },
     onSuccess: () => toast.success("Test email sent!"),
-    onError: () => toast.error("Failed to send test email"),
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || "Failed to send test email";
+      toast.error(msg);
+    },
   });
 }
 

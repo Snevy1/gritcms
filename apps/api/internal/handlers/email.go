@@ -1404,11 +1404,14 @@ func (h *EmailHandler) SendTestEmail(c *gin.Context) {
 	}
 
 	from := ""
-	if campaign.FromName != "" && campaign.FromEmail != "" {
-		from = fmt.Sprintf("%s <%s>", campaign.FromName, campaign.FromEmail)
-	} else if campaign.FromEmail != "" {
-		from = campaign.FromEmail
+	if campaign.FromEmail != "" && strings.Contains(campaign.FromEmail, "@") {
+		if campaign.FromName != "" {
+			from = fmt.Sprintf("%s <%s>", campaign.FromName, campaign.FromEmail)
+		} else {
+			from = campaign.FromEmail
+		}
 	}
+	// If from is empty, SendCampaignEmail falls back to default mailer from address
 
 	_, err := h.Mailer.SendCampaignEmail(c.Request.Context(), mail.CampaignEmailOptions{
 		From:     from,
