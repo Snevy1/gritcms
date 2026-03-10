@@ -425,12 +425,18 @@ func (h *EmailHandler) sendConfirmEmail(contact models.Contact, list models.Emai
 	if h.Jobs == nil {
 		return
 	}
+	// Use site_name from settings, fall back to config AppName
+	appName := h.Cfg.AppName
+	var setting models.Setting
+	if err := h.DB.Where("key = ? AND tenant_id = ?", "site_name", 1).First(&setting).Error; err == nil && setting.Value != "" {
+		appName = setting.Value
+	}
 	confirmURL := fmt.Sprintf("%s/email/confirm/%s", strings.TrimRight(h.Cfg.WebURL, "/"), token)
 	_ = h.Jobs.EnqueueSendEmail(contact.Email, "Confirm your subscription", "subscription-confirm", map[string]interface{}{
 		"ConfirmURL": confirmURL,
 		"ListName":   list.Name,
 		"FirstName":  contact.FirstName,
-		"AppName":    h.Cfg.AppName,
+		"AppName":    appName,
 		"Year":       time.Now().Year(),
 	})
 }
