@@ -161,14 +161,25 @@ func handleCampaignProcess(deps WorkerDeps) func(ctx context.Context, task *asyn
 
 		log.Printf("Processing campaign %d", payload.CampaignID)
 
+		// Panic recovery — mark campaign as failed so it doesn't stay stuck in "sending"
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("PANIC in campaign %d processing: %v", payload.CampaignID, r)
+				deps.DB.Model(&models.EmailCampaign{}).Where("id = ?", payload.CampaignID).
+					Update("status", models.CampaignStatusFailed)
+			}
+		}()
+
 		// Load campaign with template
 		var campaign models.EmailCampaign
 		if err := deps.DB.Preload("Template").First(&campaign, payload.CampaignID).Error; err != nil {
+			deps.DB.Model(&models.EmailCampaign{}).Where("id = ?", payload.CampaignID).
+				Update("status", models.CampaignStatusFailed)
 			return fmt.Errorf("loading campaign %d: %w", payload.CampaignID, err)
 		}
 
-		// Skip if already sent or cancelled
-		if campaign.Status == models.CampaignStatusSent || campaign.Status == models.CampaignStatusCancelled {
+		// Skip if already sent, cancelled, or failed
+		if campaign.Status == models.CampaignStatusSent || campaign.Status == models.CampaignStatusCancelled || campaign.Status == models.CampaignStatusFailed {
 			log.Printf("Campaign %d already %s, skipping", payload.CampaignID, campaign.Status)
 			return nil
 		}

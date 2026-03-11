@@ -338,6 +338,22 @@ export function useScheduleCampaign() {
   });
 }
 
+export function useRetryCampaign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const { data } = await apiClient.post(`/api/email/campaigns/${id}/retry`);
+      return data.data as EmailCampaign;
+    },
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: ["email-campaigns"] });
+      qc.invalidateQueries({ queryKey: ["email-campaigns", id] });
+      toast.success("Campaign re-queued for sending");
+    },
+    onError: () => toast.error("Failed to retry campaign"),
+  });
+}
+
 export function useCampaignStats(id: number) {
   return useQuery({
     queryKey: ["email-campaigns", id, "stats"],

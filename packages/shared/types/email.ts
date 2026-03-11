@@ -54,7 +54,7 @@ export interface EmailTemplate {
 
 // --- Email Campaigns ---
 
-export type CampaignStatus = "draft" | "scheduled" | "sending" | "sent" | "cancelled";
+export type CampaignStatus = "draft" | "scheduled" | "sending" | "sent" | "cancelled" | "failed";
 
 export interface CampaignStats {
   sent: number;

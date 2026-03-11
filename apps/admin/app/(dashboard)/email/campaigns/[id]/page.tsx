@@ -8,13 +8,14 @@ import {
   useUpdateEmailCampaign,
   useCreateEmailCampaign,
   useScheduleCampaign,
+  useRetryCampaign,
   useCampaignStats,
   useEmailTemplates,
   useEmailLists,
   useSegments,
   useSendTestEmail,
 } from "@/hooks/use-email";
-import { ChevronLeft, Save, Loader2, Play, Send } from "@/lib/icons";
+import { ChevronLeft, Save, Loader2, Play, Send, RefreshCw } from "@/lib/icons";
 import { useConfirm } from "@/hooks/use-confirm";
 import { EmailEditor } from "@/components/email-editor";
 
@@ -24,6 +25,7 @@ const statusBadge: Record<string, string> = {
   sending: "bg-warning/10 text-warning",
   sent: "bg-success/10 text-success",
   cancelled: "bg-danger/10 text-danger",
+  failed: "bg-danger/10 text-danger",
 };
 
 export default function CampaignEditorPage() {
@@ -45,6 +47,7 @@ export default function CampaignEditorPage() {
   const { mutate: createCampaign, isPending: isCreating } = useCreateEmailCampaign();
   const { mutate: scheduleCampaign, isPending: isScheduling } = useScheduleCampaign();
   const { mutate: sendTestEmail, isPending: isSendingTest } = useSendTestEmail();
+  const { mutate: retryCampaign, isPending: isRetrying } = useRetryCampaign();
   const confirm = useConfirm();
 
   // --- Form state ---
@@ -88,6 +91,7 @@ export default function CampaignEditorPage() {
   const isSaving = isUpdating || isCreating;
   const isSent = campaign?.status === "sent";
   const isSending = campaign?.status === "sending";
+  const isFailed = campaign?.status === "failed";
   const isReadOnly = isSent || isSending;
 
   // --- Handlers ---
@@ -121,6 +125,12 @@ export default function CampaignEditorPage() {
     if (!ok) return;
     if (isNew) return;
     scheduleCampaign({ id });
+  }
+
+  async function handleRetry() {
+    const ok = await confirm({ title: "Retry Campaign", description: "This will clear previous send records and re-send the campaign to all recipients.", confirmLabel: "Retry", variant: "danger" });
+    if (!ok) return;
+    retryCampaign(id);
   }
 
   async function handleSchedule() {
@@ -324,6 +334,16 @@ export default function CampaignEditorPage() {
                 <p className="text-xs text-text-muted">
                   Sent: {new Date(campaign.sent_at).toLocaleString()}
                 </p>
+              )}
+              {(isFailed || isSending) && (
+                <button
+                  onClick={handleRetry}
+                  disabled={isRetrying}
+                  className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-warning px-3 py-2 text-sm font-medium text-white hover:bg-warning/90 disabled:opacity-50"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  {isRetrying ? "Retrying..." : "Retry Campaign"}
+                </button>
               )}
             </div>
           )}

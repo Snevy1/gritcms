@@ -6,7 +6,7 @@ import { useEmailCampaigns, useDeleteEmailCampaign, useDuplicateEmailCampaign } 
 import { Plus, Trash2, Pencil, Copy, Loader2 } from "@/lib/icons";
 import { useConfirm } from "@/hooks/use-confirm";
 
-const STATUSES = ["draft", "scheduled", "sending", "sent", "cancelled"] as const;
+const STATUSES = ["draft", "scheduled", "sending", "sent", "cancelled", "failed"] as const;
 
 const statusBadge: Record<string, string> = {
   draft: "bg-bg-elevated text-text-muted",
@@ -14,6 +14,7 @@ const statusBadge: Record<string, string> = {
   sending: "bg-warning/10 text-warning",
   sent: "bg-success/10 text-success",
   cancelled: "bg-danger/10 text-danger",
+  failed: "bg-danger/10 text-danger",
 };
 
 export default function CampaignsPage() {

@@ -822,23 +822,215 @@ func (h *EmailHandler) ScheduleCampaign(c *gin.Context) {
 			}
 		} else {
 			// No job client (Redis not configured) — process inline in goroutine as fallback
-			go processCampaignInline(h.DB, campaign.ID)
+			go h.processCampaignInline(campaign.ID)
 		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": campaign})
 }
 
-// processCampaignInline is a fallback for when Redis/jobs are not available.
-// It sends campaign emails synchronously in a goroutine.
-func processCampaignInline(db *gorm.DB, campaignID uint) {
-	// This is a minimal fallback — the real processing is in jobs/workers.go handleCampaignProcess.
-	// Just mark as sent so it doesn't stay stuck.
+// RetryCampaign resets a stuck/failed campaign and re-enqueues it for sending.
+func (h *EmailHandler) RetryCampaign(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
 	var campaign models.EmailCampaign
-	if err := db.First(&campaign, campaignID).Error; err != nil {
+	if err := h.DB.First(&campaign, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Campaign not found"})
 		return
 	}
-	db.Model(&campaign).Update("status", models.CampaignStatusSent)
+
+	// Only allow retry for failed or stuck-sending campaigns
+	if campaign.Status != models.CampaignStatusFailed && campaign.Status != models.CampaignStatusSending {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Campaign can only be retried if it is failed or stuck in sending"})
+		return
+	}
+
+	// Delete any previous send records for this campaign so they get re-created
+	h.DB.Where("campaign_id = ?", campaign.ID).Delete(&models.EmailSend{})
+
+	// Reset to sending
+	campaign.Status = models.CampaignStatusSending
+	now := time.Now()
+	campaign.SentAt = &now
+	h.DB.Save(&campaign)
+
+	if h.Jobs != nil {
+		if err := h.Jobs.EnqueueCampaignProcess(campaign.ID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to enqueue campaign: " + err.Error()})
+			return
+		}
+	} else {
+		go h.processCampaignInline(campaign.ID)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": campaign, "message": "Campaign re-queued for sending"})
+}
+
+// processCampaignInline is a fallback for when Redis/jobs are not available.
+// It sends campaign emails in a goroutine using the handler's mailer.
+func (h *EmailHandler) processCampaignInline(campaignID uint) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("PANIC in inline campaign %d: %v\n", campaignID, r)
+			h.DB.Model(&models.EmailCampaign{}).Where("id = ?", campaignID).
+				Update("status", models.CampaignStatusFailed)
+		}
+	}()
+
+	var campaign models.EmailCampaign
+	if err := h.DB.Preload("Template").First(&campaign, campaignID).Error; err != nil {
+		return
+	}
+
+	if h.Mailer == nil {
+		h.DB.Model(&campaign).Update("status", models.CampaignStatusFailed)
+		return
+	}
+
+	// Resolve HTML content
+	htmlContent := campaign.HTMLContent
+	subject := campaign.Subject
+	if subject == "" && campaign.Template != nil {
+		subject = campaign.Template.Subject
+	}
+	if campaign.Template != nil && campaign.Template.HTMLContent != "" {
+		tmpl := campaign.Template.HTMLContent
+		tmpl = strings.ReplaceAll(tmpl, "{{subject}}", subject)
+		tmpl = strings.ReplaceAll(tmpl, "{{content}}", htmlContent)
+		htmlContent = tmpl
+	}
+	if htmlContent == "" {
+		h.DB.Model(&campaign).Update("status", models.CampaignStatusSent)
+		return
+	}
+
+	// Load social footer
+	var socialSettings []models.Setting
+	h.DB.Where("`group` = ? AND `key` LIKE ?", "theme", "social_%").Find(&socialSettings)
+	socials := map[string]string{}
+	for _, s := range socialSettings {
+		socials[s.Key] = s.Value
+	}
+	socialFooter := mail.BuildSocialFooter(socials)
+	if socialFooter != "" {
+		htmlContent += socialFooter
+	}
+
+	// Build "from"
+	from := ""
+	if campaign.FromName != "" && campaign.FromEmail != "" {
+		from = fmt.Sprintf("%s <%s>", campaign.FromName, campaign.FromEmail)
+	} else if campaign.FromEmail != "" {
+		from = campaign.FromEmail
+	}
+
+	// Collect recipients
+	recipientIDs := map[uint]bool{}
+	var listIDs []uint
+	if campaign.ListIDs != nil {
+		_ = json.Unmarshal(campaign.ListIDs, &listIDs)
+	}
+	if len(listIDs) > 0 {
+		var subs []models.EmailSubscription
+		h.DB.Where("email_list_id IN ? AND status = ?", listIDs, models.SubStatusActive).Find(&subs)
+		for _, sub := range subs {
+			recipientIDs[sub.ContactID] = true
+		}
+	}
+	var tagIDs []uint
+	if campaign.TagIDs != nil {
+		_ = json.Unmarshal(campaign.TagIDs, &tagIDs)
+	}
+	if len(tagIDs) > 0 {
+		var contactIDs []uint
+		h.DB.Raw("SELECT DISTINCT contact_id FROM contact_tags WHERE tag_id IN ?", tagIDs).Scan(&contactIDs)
+		for _, cid := range contactIDs {
+			recipientIDs[cid] = true
+		}
+	}
+
+	if len(recipientIDs) == 0 {
+		h.DB.Model(&campaign).Update("status", models.CampaignStatusSent)
+		return
+	}
+
+	ids := make([]uint, 0, len(recipientIDs))
+	for id := range recipientIDs {
+		ids = append(ids, id)
+	}
+	var contacts []models.Contact
+	h.DB.Where("id IN ?", ids).Find(&contacts)
+
+	// Build unsubscribe token map
+	contactUnsubToken := map[uint]string{}
+	if len(listIDs) > 0 {
+		var allSubs []models.EmailSubscription
+		h.DB.Where("email_list_id IN ? AND status = ?", listIDs, models.SubStatusActive).Find(&allSubs)
+		for _, sub := range allSubs {
+			if sub.ConfirmToken != "" {
+				contactUnsubToken[sub.ContactID] = sub.ConfirmToken
+			}
+		}
+	}
+
+	appURL := ""
+	if h.Cfg != nil {
+		appURL = h.Cfg.AppURL
+	}
+
+	sentCount := 0
+	failedCount := 0
+	for _, contact := range contacts {
+		if contact.Email == "" {
+			continue
+		}
+
+		recipientHTML := htmlContent
+		if token, ok := contactUnsubToken[contact.ID]; ok && appURL != "" {
+			unsubURL := strings.TrimRight(appURL, "/") + "/api/email/unsubscribe/" + token
+			recipientHTML = strings.ReplaceAll(recipientHTML, "{{unsubscribe_url}}", unsubURL)
+		}
+		recipientHTML = strings.ReplaceAll(recipientHTML, "{{unsubscribe_url}}", "#")
+
+		emailB64 := base64.URLEncoding.EncodeToString([]byte(contact.Email))
+		recipientHTML = strings.ReplaceAll(recipientHTML, "{{subscriber_email_b64}}", emailB64)
+		recipientHTML = mail.PrepareEmailHTML(recipientHTML)
+
+		now := time.Now()
+		send := models.EmailSend{
+			TenantID:   1,
+			ContactID:  contact.ID,
+			CampaignID: &campaign.ID,
+			Subject:    subject,
+			Status:     models.SendStatusQueued,
+			SentAt:     &now,
+		}
+		h.DB.Create(&send)
+
+		messageID, err := h.Mailer.SendCampaignEmail(nil, mail.CampaignEmailOptions{
+			From:     from,
+			ReplyTo:  campaign.ReplyTo,
+			To:       contact.Email,
+			Subject:  subject,
+			HTMLBody: recipientHTML,
+		})
+		if err != nil {
+			h.DB.Model(&send).Update("status", models.SendStatusFailed)
+			failedCount++
+			continue
+		}
+		h.DB.Model(&send).Updates(map[string]interface{}{
+			"status":      models.SendStatusSent,
+			"external_id": messageID,
+		})
+		sentCount++
+	}
+
+	stats := models.CampaignStats{Sent: sentCount, Bounced: failedCount}
+	statsJSON, _ := json.Marshal(stats)
+	h.DB.Model(&campaign).Updates(map[string]interface{}{
+		"status": models.CampaignStatusSent,
+		"stats":  statsJSON,
+	})
 }
 
 // GetCampaignStats returns analytics for a campaign.
