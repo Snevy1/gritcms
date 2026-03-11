@@ -106,7 +106,7 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 				cfg.GORMStudioUsername: cfg.GORMStudioPassword,
 			})
 		}
-		studio.Mount(r, db, []interface{}{&models.Tenant{}, &models.User{}, &models.Upload{}, &models.Blog{}, &models.Setting{}, &models.MediaAsset{}, &models.Tag{}, &models.Contact{}, &models.ContactActivity{}, &models.CustomFieldDefinition{}, &models.Page{}, &models.Post{}, &models.PostCategory{}, &models.PostTag{}, &models.Menu{}, &models.MenuItem{}, &models.EmailList{}, &models.EmailSubscription{}, &models.EmailTemplate{}, &models.EmailCampaign{}, &models.EmailSend{}, &models.EmailSequence{}, &models.EmailSequenceStep{}, &models.EmailSequenceEnrollment{}, &models.Segment{}, &models.Course{}, &models.CourseModule{}, &models.Lesson{}, &models.CourseEnrollment{}, &models.LessonProgress{}, &models.Quiz{}, &models.QuizQuestion{}, &models.QuizAttempt{}, &models.Certificate{}, &models.Product{}, &models.Price{}, &models.ProductVariant{}, &models.Coupon{}, &models.Order{}, &models.OrderItem{}, &models.Subscription{}, &models.Space{}, &models.CommunityMember{}, &models.Thread{}, &models.Reply{}, &models.Reaction{}, &models.CommunityEvent{}, &models.EventAttendee{}, &models.Funnel{}, &models.FunnelStep{}, &models.FunnelVisit{}, &models.FunnelConversion{}, &models.Calendar{}, &models.BookingEventType{}, &models.Availability{}, &models.Appointment{}, &models.AffiliateProgram{}, &models.AffiliateAccount{}, &models.AffiliateLink{}, &models.Commission{}, &models.Payout{}, &models.Workflow{}, &models.WorkflowAction{}, &models.WorkflowExecution{} /* grit:studio */}, studioCfg)
+		studio.Mount(r, db, []interface{}{&models.Tenant{}, &models.User{}, &models.Upload{}, &models.Blog{}, &models.Setting{}, &models.MediaAsset{}, &models.Tag{}, &models.Contact{}, &models.ContactActivity{}, &models.CustomFieldDefinition{}, &models.Page{}, &models.Post{}, &models.PostCategory{}, &models.PostTag{}, &models.Menu{}, &models.MenuItem{}, &models.EmailList{}, &models.EmailSubscription{}, &models.EmailTemplate{}, &models.EmailCampaign{}, &models.EmailSend{}, &models.EmailSequence{}, &models.EmailSequenceStep{}, &models.EmailSequenceEnrollment{}, &models.Segment{}, &models.Course{}, &models.CourseModule{}, &models.Lesson{}, &models.CourseEnrollment{}, &models.LessonProgress{}, &models.Quiz{}, &models.QuizQuestion{}, &models.QuizAttempt{}, &models.Certificate{}, &models.Product{}, &models.Price{}, &models.ProductVariant{}, &models.Coupon{}, &models.Order{}, &models.OrderItem{}, &models.Subscription{}, &models.Space{}, &models.CommunityMember{}, &models.Thread{}, &models.Reply{}, &models.Reaction{}, &models.CommunityEvent{}, &models.EventAttendee{}, &models.Funnel{}, &models.FunnelStep{}, &models.FunnelVisit{}, &models.FunnelConversion{}, &models.Calendar{}, &models.BookingEventType{}, &models.Availability{}, &models.Appointment{}, &models.AffiliateProgram{}, &models.AffiliateAccount{}, &models.AffiliateLink{}, &models.Commission{}, &models.Payout{}, &models.Workflow{}, &models.WorkflowAction{}, &models.WorkflowExecution{}, &models.PremiumGuide{}, &models.GuideDownload{} /* grit:studio */}, studioCfg)
 		log.Println("GORM Studio mounted at /studio")
 	}
 
@@ -117,7 +117,7 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 		Version:     "1.0.0",
 		UI:          gindocs.UIScalar,
 		ScalarTheme: "kepler",
-		Models:      []interface{}{&models.Tenant{}, &models.User{}, &models.Upload{}, &models.Blog{}, &models.Setting{}, &models.MediaAsset{}, &models.Tag{}, &models.Contact{}, &models.ContactActivity{}, &models.CustomFieldDefinition{}, &models.Page{}, &models.Post{}, &models.PostCategory{}, &models.PostTag{}, &models.Menu{}, &models.MenuItem{}, &models.EmailList{}, &models.EmailSubscription{}, &models.EmailTemplate{}, &models.EmailCampaign{}, &models.EmailSend{}, &models.EmailSequence{}, &models.EmailSequenceStep{}, &models.EmailSequenceEnrollment{}, &models.Segment{}, &models.Course{}, &models.CourseModule{}, &models.Lesson{}, &models.CourseEnrollment{}, &models.LessonProgress{}, &models.Quiz{}, &models.QuizQuestion{}, &models.QuizAttempt{}, &models.Certificate{}, &models.Product{}, &models.Price{}, &models.ProductVariant{}, &models.Coupon{}, &models.Order{}, &models.OrderItem{}, &models.Subscription{}, &models.Space{}, &models.CommunityMember{}, &models.Thread{}, &models.Reply{}, &models.Reaction{}, &models.CommunityEvent{}, &models.EventAttendee{}, &models.Funnel{}, &models.FunnelStep{}, &models.FunnelVisit{}, &models.FunnelConversion{}, &models.Calendar{}, &models.BookingEventType{}, &models.Availability{}, &models.Appointment{}, &models.AffiliateProgram{}, &models.AffiliateAccount{}, &models.AffiliateLink{}, &models.Commission{}, &models.Payout{}, &models.Workflow{}, &models.WorkflowAction{}, &models.WorkflowExecution{}},
+		Models:      []interface{}{&models.Tenant{}, &models.User{}, &models.Upload{}, &models.Blog{}, &models.Setting{}, &models.MediaAsset{}, &models.Tag{}, &models.Contact{}, &models.ContactActivity{}, &models.CustomFieldDefinition{}, &models.Page{}, &models.Post{}, &models.PostCategory{}, &models.PostTag{}, &models.Menu{}, &models.MenuItem{}, &models.EmailList{}, &models.EmailSubscription{}, &models.EmailTemplate{}, &models.EmailCampaign{}, &models.EmailSend{}, &models.EmailSequence{}, &models.EmailSequenceStep{}, &models.EmailSequenceEnrollment{}, &models.Segment{}, &models.Course{}, &models.CourseModule{}, &models.Lesson{}, &models.CourseEnrollment{}, &models.LessonProgress{}, &models.Quiz{}, &models.QuizQuestion{}, &models.QuizAttempt{}, &models.Certificate{}, &models.Product{}, &models.Price{}, &models.ProductVariant{}, &models.Coupon{}, &models.Order{}, &models.OrderItem{}, &models.Subscription{}, &models.Space{}, &models.CommunityMember{}, &models.Thread{}, &models.Reply{}, &models.Reaction{}, &models.CommunityEvent{}, &models.EventAttendee{}, &models.Funnel{}, &models.FunnelStep{}, &models.FunnelVisit{}, &models.FunnelConversion{}, &models.Calendar{}, &models.BookingEventType{}, &models.Availability{}, &models.Appointment{}, &models.AffiliateProgram{}, &models.AffiliateAccount{}, &models.AffiliateLink{}, &models.Commission{}, &models.Payout{}, &models.Workflow{}, &models.WorkflowAction{}, &models.WorkflowExecution{}, &models.PremiumGuide{}, &models.GuideDownload{}},
 		Auth: gindocs.AuthConfig{
 			Type:         gindocs.AuthBearer,
 			BearerFormat: "JWT",
@@ -204,6 +204,7 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 	affiliateHandler := handlers.NewAffiliateHandler(db)
 	workflowHandler := handlers.NewWorkflowHandler(db)
 	paymentHandler := handlers.NewPaymentHandler(db, cfg)
+	guideHandler := handlers.NewGuideHandler(db)
 	// grit:handlers
 
 	// Health check
@@ -259,6 +260,12 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 	// Public community routes (cached)
 	r.GET("/api/p/community/spaces", publicCache, communityHandler.ListPublicSpaces)
 	r.GET("/api/p/community/spaces/:slug", shortCache, communityHandler.GetPublicSpace)
+
+	// Public guide routes
+	r.GET("/api/p/guides", publicCache, guideHandler.ListPublicGuides)
+	r.GET("/api/p/guides/:slug", publicCache, guideHandler.GetPublicGuide)
+	r.GET("/api/p/guides/:slug/access", guideHandler.CheckGuideAccess)
+	r.GET("/api/p/guides/:slug/download", guideHandler.DownloadGuide)
 
 	// Public funnel routes (cached)
 	r.GET("/api/p/funnels/:slug", publicCache, funnelHandler.GetPublicFunnel)
@@ -772,6 +779,13 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 				"goroutines":       runtime.NumGoroutine(),
 			}})
 		})
+
+		// Guides
+		admin.GET("/guides", guideHandler.ListGuides)
+		admin.GET("/guides/:id", guideHandler.GetGuide)
+		admin.POST("/guides", guideHandler.CreateGuide)
+		admin.PUT("/guides/:id", guideHandler.UpdateGuide)
+		admin.DELETE("/guides/:id", guideHandler.DeleteGuide)
 
 		// grit:routes:admin
 	}

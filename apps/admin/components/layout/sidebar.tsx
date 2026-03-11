@@ -146,6 +146,7 @@ export function Sidebar({ user, collapsed, onToggle, mobileOpen, onMobileClose }
         { label: "Booking", href: "/booking", icon: "CalendarCheck" },
         { label: "Affiliates", href: "/affiliates", icon: "Link" },
         { label: "Automation", href: "/automation", icon: "Zap" },
+        { label: "Guides", href: "/guides", icon: "BookMarked" },
         { label: "Analytics", href: "/analytics", icon: "BarChart3" },
       ]
     : [];

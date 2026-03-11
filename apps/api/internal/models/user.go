@@ -143,6 +143,8 @@ func Models() []interface{} {
 		&Workflow{},
 		&WorkflowAction{},
 		&WorkflowExecution{},
+		&PremiumGuide{},
+		&GuideDownload{},
 		// grit:models
 	}
 }

@@ -32,6 +32,7 @@ import {
   Undo,
   Redo,
   X,
+  BookMarked,
 } from "@/lib/icons";
 
 interface EmailEditorProps {
@@ -40,7 +41,7 @@ interface EmailEditorProps {
   placeholder?: string;
 }
 
-type ModalType = null | "link" | "image" | "youtube" | "cta";
+type ModalType = null | "link" | "image" | "youtube" | "cta" | "guide";
 
 export function EmailEditor({ value, onChange, placeholder }: EmailEditorProps) {
   const [activeModal, setActiveModal] = useState<ModalType>(null);
@@ -161,6 +162,16 @@ export function EmailEditor({ value, onChange, placeholder }: EmailEditorProps) 
       if (!editor || !text || !url) return;
       const ctaHtml = `<p style="text-align: center; margin: 24px 0;"><a href="${url}" data-cta="true" style="display: inline-block; background-color: #6c5ce7; color: #ffffff; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">${text}</a></p>`;
       editor.chain().focus().insertContent(ctaHtml).run();
+      setActiveModal(null);
+    },
+    [editor]
+  );
+
+  const handleGuideSubmit = useCallback(
+    (text: string, url: string) => {
+      if (!editor || !text || !url) return;
+      const guideHtml = `<p style="text-align: center; margin: 24px 0;"><a href="${url}" data-cta="true" style="display: inline-block; background-color: #6c5ce7; color: #ffffff; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">${text}</a></p>`;
+      editor.chain().focus().insertContent(guideHtml).run();
       setActiveModal(null);
     },
     [editor]
@@ -306,6 +317,9 @@ export function EmailEditor({ value, onChange, placeholder }: EmailEditorProps) 
           <ToolbarButton onClick={() => setActiveModal("cta")} title="Insert CTA Button">
             <MousePointerClick className="h-4 w-4" />
           </ToolbarButton>
+          <ToolbarButton onClick={() => setActiveModal("guide")} title="Insert Guide Link">
+            <BookMarked className="h-4 w-4" />
+          </ToolbarButton>
 
           <Separator />
 
@@ -384,6 +398,12 @@ export function EmailEditor({ value, onChange, placeholder }: EmailEditorProps) 
       {activeModal === "cta" && (
         <CtaModal
           onSubmit={handleCtaSubmit}
+          onClose={() => setActiveModal(null)}
+        />
+      )}
+      {activeModal === "guide" && (
+        <GuideModal
+          onSubmit={handleGuideSubmit}
           onClose={() => setActiveModal(null)}
         />
       )}
@@ -704,6 +724,94 @@ function CtaModal({
         onSubmit={() => onSubmit(text, url)}
         submitLabel="Insert Button"
         disabled={!text || !url || url === "https://"}
+      />
+    </ModalOverlay>
+  );
+}
+
+// ─── Guide Link Modal ─────────────────────────────────────────────
+
+function GuideModal({
+  onSubmit,
+  onClose,
+}: {
+  onSubmit: (text: string, url: string) => void;
+  onClose: () => void;
+}) {
+  const [guides, setGuides] = useState<{ id: number; title: string; slug: string }[]>([]);
+  const [selectedSlug, setSelectedSlug] = useState("");
+  const [buttonText, setButtonText] = useState("Read the Guide");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    import("@/lib/api-client").then(({ apiClient }) => {
+      apiClient
+        .get("/api/guides")
+        .then(({ data }) => {
+          const list = (data.data || []).filter(
+            (g: { status: string }) => g.status === "published"
+          );
+          setGuides(list);
+          if (list.length > 0) setSelectedSlug(list[0].slug);
+        })
+        .finally(() => setLoading(false));
+    });
+  }, []);
+
+  const selectedGuide = guides.find((g) => g.slug === selectedSlug);
+  const guideUrl = selectedSlug
+    ? `/guides/${selectedSlug}?e={{subscriber_email_b64}}`
+    : "";
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <ModalHeader title="Insert Guide Link" icon={<BookMarked className="h-4 w-4" />} onClose={onClose} />
+      <div className="space-y-4">
+        {loading ? (
+          <p className="text-sm text-text-muted text-center py-4">Loading guides...</p>
+        ) : guides.length === 0 ? (
+          <p className="text-sm text-text-muted text-center py-4">
+            No published guides found. Create and publish a guide first.
+          </p>
+        ) : (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1.5">Select Guide</label>
+              <select
+                value={selectedSlug}
+                onChange={(e) => setSelectedSlug(e.target.value)}
+                className="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2.5 text-sm text-foreground focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30 transition-colors"
+              >
+                {guides.map((g) => (
+                  <option key={g.slug} value={g.slug}>
+                    {g.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <ModalInput
+              label="Button Text"
+              value={buttonText}
+              onChange={setButtonText}
+              placeholder="e.g. Read the Guide"
+            />
+            {selectedGuide && (
+              <div className="rounded-lg border border-border bg-bg-secondary p-3">
+                <p className="text-xs text-text-muted mb-1">Link preview:</p>
+                <p className="text-xs text-accent truncate">{guideUrl}</p>
+                <p className="text-xs text-text-muted mt-1">
+                  The <code className="text-accent/80">{"{{subscriber_email_b64}}"}</code> tag will be replaced with each subscriber&apos;s email for auto-access.
+                </p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+      <ModalActions
+        onClose={onClose}
+        onSubmit={() => onSubmit(buttonText, guideUrl)}
+        submitLabel="Insert Guide Link"
+        disabled={!selectedSlug || !buttonText}
       />
     </ModalOverlay>
   );

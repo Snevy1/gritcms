@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -1500,6 +1501,10 @@ func (h *EmailHandler) SendTestEmail(c *gin.Context) {
 
 	// Replace unsubscribe placeholder with a no-op link for test emails
 	htmlContent = strings.ReplaceAll(htmlContent, "{{unsubscribe_url}}", "#")
+
+	// Replace subscriber email merge tag with test email for guide access links
+	testEmailB64 := base64.URLEncoding.EncodeToString([]byte(body.Email))
+	htmlContent = strings.ReplaceAll(htmlContent, "{{subscriber_email_b64}}", testEmailB64)
 
 	// Transform editor HTML to email-safe HTML (YouTube iframes → thumbnails, CTA buttons, strip classes)
 	htmlContent = mail.PrepareEmailHTML(htmlContent)

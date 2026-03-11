@@ -3,6 +3,7 @@ package jobs
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -307,6 +308,10 @@ func handleCampaignProcess(deps WorkerDeps) func(ctx context.Context, task *asyn
 			}
 			// Remove any remaining unsubscribe placeholders for non-list recipients
 			recipientHTML = strings.ReplaceAll(recipientHTML, "{{unsubscribe_url}}", "#")
+
+			// Replace subscriber email merge tag (for guide access links etc.)
+			emailB64 := base64.URLEncoding.EncodeToString([]byte(contact.Email))
+			recipientHTML = strings.ReplaceAll(recipientHTML, "{{subscriber_email_b64}}", emailB64)
 
 			// Transform editor HTML to email-safe HTML (YouTube iframes → thumbnails, strip classes)
 			recipientHTML = mail.PrepareEmailHTML(recipientHTML)
