@@ -3,6 +3,7 @@ package jobs
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hibiken/asynq"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
 	"gritcms/apps/api/internal/cache"
@@ -25,6 +27,7 @@ type WorkerDeps struct {
 	Storage *storage.Storage
 	Cache   *cache.Cache
 	Jobs    *Client
+	AppURL  string // Base API URL for generating links (e.g. unsubscribe URLs)
 }
 
 // StartWorker starts the asynq worker server in a goroutine.
@@ -159,14 +162,25 @@ func handleCampaignProcess(deps WorkerDeps) func(ctx context.Context, task *asyn
 
 		log.Printf("Processing campaign %d", payload.CampaignID)
 
+		// Panic recovery — mark campaign as failed so it doesn't stay stuck in "sending"
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("PANIC in campaign %d processing: %v", payload.CampaignID, r)
+				deps.DB.Model(&models.EmailCampaign{}).Where("id = ?", payload.CampaignID).
+					Update("status", models.CampaignStatusFailed)
+			}
+		}()
+
 		// Load campaign with template
 		var campaign models.EmailCampaign
 		if err := deps.DB.Preload("Template").First(&campaign, payload.CampaignID).Error; err != nil {
+			deps.DB.Model(&models.EmailCampaign{}).Where("id = ?", payload.CampaignID).
+				Update("status", models.CampaignStatusFailed)
 			return fmt.Errorf("loading campaign %d: %w", payload.CampaignID, err)
 		}
 
-		// Skip if already sent or cancelled
-		if campaign.Status == models.CampaignStatusSent || campaign.Status == models.CampaignStatusCancelled {
+		// Skip if already sent, cancelled, or failed
+		if campaign.Status == models.CampaignStatusSent || campaign.Status == models.CampaignStatusCancelled || campaign.Status == models.CampaignStatusFailed {
 			log.Printf("Campaign %d already %s, skipping", payload.CampaignID, campaign.Status)
 			return nil
 		}
@@ -177,10 +191,19 @@ func handleCampaignProcess(deps WorkerDeps) func(ctx context.Context, task *asyn
 			"sent_at": time.Now(),
 		})
 
-		// Resolve HTML content: template takes priority, then inline content
+		// Resolve HTML content
 		htmlContent := campaign.HTMLContent
+		subject := campaign.Subject
+		if subject == "" && campaign.Template != nil {
+			subject = campaign.Template.Subject
+		}
+
+		// If a template is selected, use it as a layout wrapper and substitute placeholders
 		if campaign.Template != nil && campaign.Template.HTMLContent != "" {
-			htmlContent = campaign.Template.HTMLContent
+			tmpl := campaign.Template.HTMLContent
+			tmpl = strings.ReplaceAll(tmpl, "{{subject}}", subject)
+			tmpl = strings.ReplaceAll(tmpl, "{{content}}", htmlContent)
+			htmlContent = tmpl
 		}
 		if htmlContent == "" {
 			deps.DB.Model(&campaign).Update("status", models.CampaignStatusSent)
@@ -188,9 +211,16 @@ func handleCampaignProcess(deps WorkerDeps) func(ctx context.Context, task *asyn
 			return nil
 		}
 
-		subject := campaign.Subject
-		if subject == "" && campaign.Template != nil {
-			subject = campaign.Template.Subject
+		// Load social settings for email footer
+		var socialSettings []models.Setting
+		deps.DB.Where("`group` = ? AND `key` LIKE ?", "theme", "social_%").Find(&socialSettings)
+		socials := map[string]string{}
+		for _, s := range socialSettings {
+			socials[s.Key] = s.Value
+		}
+		socialFooter := mail.BuildSocialFooter(socials)
+		if socialFooter != "" {
+			htmlContent += socialFooter
 		}
 
 		// Build "from" string
@@ -262,6 +292,18 @@ func handleCampaignProcess(deps WorkerDeps) func(ctx context.Context, task *asyn
 		var contacts []models.Contact
 		deps.DB.Where("id IN ?", ids).Find(&contacts)
 
+		// Build contact → unsubscribe token map from subscriptions
+		contactUnsubToken := map[uint]string{}
+		if len(listIDs) > 0 {
+			var allSubs []models.EmailSubscription
+			deps.DB.Where("email_list_id IN ? AND status = ?", listIDs, models.SubStatusActive).Find(&allSubs)
+			for _, sub := range allSubs {
+				if sub.ConfirmToken != "" {
+					contactUnsubToken[sub.ContactID] = sub.ConfirmToken
+				}
+			}
+		}
+
 		// Send to each contact
 		sentCount := 0
 		failedCount := 0
@@ -269,6 +311,22 @@ func handleCampaignProcess(deps WorkerDeps) func(ctx context.Context, task *asyn
 			if contact.Email == "" {
 				continue
 			}
+
+			// Build per-recipient HTML with unsubscribe URL
+			recipientHTML := htmlContent
+			if token, ok := contactUnsubToken[contact.ID]; ok && deps.AppURL != "" {
+				unsubURL := strings.TrimRight(deps.AppURL, "/") + "/api/email/unsubscribe/" + token
+				recipientHTML = strings.ReplaceAll(recipientHTML, "{{unsubscribe_url}}", unsubURL)
+			}
+			// Remove any remaining unsubscribe placeholders for non-list recipients
+			recipientHTML = strings.ReplaceAll(recipientHTML, "{{unsubscribe_url}}", "#")
+
+			// Replace subscriber email merge tag (for guide access links etc.)
+			emailB64 := base64.URLEncoding.EncodeToString([]byte(contact.Email))
+			recipientHTML = strings.ReplaceAll(recipientHTML, "{{subscriber_email_b64}}", emailB64)
+
+			// Transform editor HTML to email-safe HTML (YouTube iframes → thumbnails, strip classes)
+			recipientHTML = mail.PrepareEmailHTML(recipientHTML)
 
 			// Create EmailSend record
 			now := time.Now()
@@ -288,7 +346,7 @@ func handleCampaignProcess(deps WorkerDeps) func(ctx context.Context, task *asyn
 				ReplyTo:  campaign.ReplyTo,
 				To:       contact.Email,
 				Subject:  subject,
-				HTMLBody: htmlContent,
+				HTMLBody: recipientHTML,
 			})
 
 			if err != nil {
@@ -313,9 +371,9 @@ func handleCampaignProcess(deps WorkerDeps) func(ctx context.Context, task *asyn
 			Bounced: failedCount,
 		}
 		statsJSON, _ := json.Marshal(stats)
-		deps.DB.Model(&campaign).Updates(map[string]interface{}{
+		deps.DB.Model(&models.EmailCampaign{}).Where("id = ?", campaign.ID).Updates(map[string]interface{}{
 			"status": models.CampaignStatusSent,
-			"stats":  statsJSON,
+			"stats":  datatypes.JSON(statsJSON),
 		})
 
 		log.Printf("Campaign %d complete: %d sent, %d failed", payload.CampaignID, sentCount, failedCount)

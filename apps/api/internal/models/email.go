@@ -87,6 +87,7 @@ const (
 	CampaignStatusSending   = "sending"
 	CampaignStatusSent      = "sent"
 	CampaignStatusCancelled = "cancelled"
+	CampaignStatusFailed    = "failed"
 )
 
 // EmailCampaign represents a one-time email blast to selected audiences.

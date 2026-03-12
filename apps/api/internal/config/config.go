@@ -26,6 +26,7 @@ type Config struct {
 	AppEnv      string
 	Port        string
 	AppURL      string
+	WebURL      string // Public-facing web frontend URL
 	DatabaseURL string
 
 	JWTSecret        string
@@ -94,6 +95,7 @@ func Load() (*Config, error) {
 		AppEnv:      getEnv("APP_ENV", "development"),
 		Port:        getEnv("APP_PORT", "8080"),
 		AppURL:      getEnv("APP_URL", "http://localhost:8080"),
+		WebURL:      getEnv("WEB_URL", getEnv("OAUTH_FRONTEND_URL", "http://localhost:3001")),
 		DatabaseURL: getEnv("DATABASE_URL", ""),
 		JWTSecret:   getEnv("JWT_SECRET", ""),
 		RedisURL:    getEnv("REDIS_URL", "redis://localhost:6379"),

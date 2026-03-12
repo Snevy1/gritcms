@@ -305,6 +305,21 @@ export function useDeleteEmailCampaign() {
   });
 }
 
+export function useDuplicateEmailCampaign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const { data } = await apiClient.post(`/api/email/campaigns/${id}/duplicate`);
+      return data.data as EmailCampaign;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["email-campaigns"] });
+      toast.success("Campaign duplicated");
+    },
+    onError: () => toast.error("Failed to duplicate campaign"),
+  });
+}
+
 export function useScheduleCampaign() {
   const qc = useQueryClient();
   return useMutation({
@@ -320,6 +335,22 @@ export function useScheduleCampaign() {
       toast.success(vars.scheduledAt ? "Campaign scheduled" : "Campaign sending");
     },
     onError: () => toast.error("Failed to schedule campaign"),
+  });
+}
+
+export function useRetryCampaign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const { data } = await apiClient.post(`/api/email/campaigns/${id}/retry`);
+      return data.data as EmailCampaign;
+    },
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: ["email-campaigns"] });
+      qc.invalidateQueries({ queryKey: ["email-campaigns", id] });
+      toast.success("Campaign re-queued for sending");
+    },
+    onError: () => toast.error("Failed to retry campaign"),
   });
 }
 
@@ -566,6 +597,22 @@ export function useSegmentPreview(id: number) {
       return data as { data: Contact[]; total: number };
     },
     enabled: id > 0,
+  });
+}
+
+// --- Test Email ---
+
+export function useSendTestEmail() {
+  return useMutation({
+    mutationFn: async ({ id, email }: { id: number; email: string }) => {
+      const { data } = await apiClient.post(`/api/email/campaigns/${id}/test`, { email });
+      return data;
+    },
+    onSuccess: () => toast.success("Test email sent!"),
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || "Failed to send test email";
+      toast.error(msg);
+    },
   });
 }
 

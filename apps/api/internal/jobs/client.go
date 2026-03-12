@@ -104,7 +104,7 @@ func (c *Client) EnqueueCampaignProcess(campaignID uint) error {
 	}
 
 	task := asynq.NewTask(TypeCampaignProcess, payload)
-	_, err = c.client.Enqueue(task, asynq.MaxRetry(1), asynq.Queue("default"))
+	_, err = c.client.Enqueue(task, asynq.MaxRetry(3), asynq.Queue("default"))
 	if err != nil {
 		return fmt.Errorf("enqueuing campaign job: %w", err)
 	}

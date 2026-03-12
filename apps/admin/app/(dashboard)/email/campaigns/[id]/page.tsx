@@ -1,20 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   useEmailCampaign,
   useUpdateEmailCampaign,
   useCreateEmailCampaign,
   useScheduleCampaign,
+  useRetryCampaign,
   useCampaignStats,
   useEmailTemplates,
   useEmailLists,
   useSegments,
+  useSendTestEmail,
 } from "@/hooks/use-email";
-import { ChevronLeft, Save, Loader2, Play } from "@/lib/icons";
+import { ChevronLeft, Save, Loader2, Play, Send, RefreshCw } from "@/lib/icons";
 import { useConfirm } from "@/hooks/use-confirm";
+import { EmailEditor } from "@/components/email-editor";
 
 const statusBadge: Record<string, string> = {
   draft: "bg-bg-elevated text-text-muted",
@@ -22,11 +25,13 @@ const statusBadge: Record<string, string> = {
   sending: "bg-warning/10 text-warning",
   sent: "bg-success/10 text-success",
   cancelled: "bg-danger/10 text-danger",
+  failed: "bg-danger/10 text-danger",
 };
 
 export default function CampaignEditorPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const isNew = params.id === "new";
   const id = isNew ? 0 : Number(params.id);
@@ -41,6 +46,8 @@ export default function CampaignEditorPage() {
   const { mutate: updateCampaign, isPending: isUpdating } = useUpdateEmailCampaign();
   const { mutate: createCampaign, isPending: isCreating } = useCreateEmailCampaign();
   const { mutate: scheduleCampaign, isPending: isScheduling } = useScheduleCampaign();
+  const { mutate: sendTestEmail, isPending: isSendingTest } = useSendTestEmail();
+  const { mutate: retryCampaign, isPending: isRetrying } = useRetryCampaign();
   const confirm = useConfirm();
 
   // --- Form state ---
@@ -54,7 +61,17 @@ export default function CampaignEditorPage() {
   const [selectedListIds, setSelectedListIds] = useState<number[]>([]);
   const [selectedSegmentIds, setSelectedSegmentIds] = useState<number[]>([]);
   const [scheduledAt, setScheduledAt] = useState("");
+  const [testEmail, setTestEmail] = useState("");
   const [initialized, setInitialized] = useState(false);
+
+  // Pre-select list from URL param (e.g. /email/campaigns/new?listId=5)
+  if (isNew && !initialized && !campaign) {
+    const preListId = searchParams.get("listId");
+    if (preListId) {
+      setSelectedListIds([Number(preListId)]);
+      setInitialized(true);
+    }
+  }
 
   // Populate form from fetched campaign
   if (campaign && !initialized) {
@@ -74,6 +91,7 @@ export default function CampaignEditorPage() {
   const isSaving = isUpdating || isCreating;
   const isSent = campaign?.status === "sent";
   const isSending = campaign?.status === "sending";
+  const isFailed = campaign?.status === "failed";
   const isReadOnly = isSent || isSending;
 
   // --- Handlers ---
@@ -107,6 +125,12 @@ export default function CampaignEditorPage() {
     if (!ok) return;
     if (isNew) return;
     scheduleCampaign({ id });
+  }
+
+  async function handleRetry() {
+    const ok = await confirm({ title: "Retry Campaign", description: "This will clear previous send records and re-send the campaign to all recipients.", confirmLabel: "Retry", variant: "danger" });
+    if (!ok) return;
+    retryCampaign(id);
   }
 
   async function handleSchedule() {
@@ -246,22 +270,21 @@ export default function CampaignEditorPage() {
             </div>
           </div>
 
-          {/* HTML Content */}
+          {/* Email Content */}
           <div className="rounded-xl border border-border bg-bg-secondary p-6 space-y-4">
             <h2 className="text-lg font-semibold text-foreground">Email Content</h2>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1">
-                HTML Content
-              </label>
-              <textarea
-                value={htmlContent}
-                onChange={(e) => setHtmlContent(e.target.value)}
-                disabled={isReadOnly}
-                rows={16}
-                placeholder="Paste or write your HTML email content here..."
-                className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm text-foreground font-mono focus:border-accent focus:outline-none disabled:opacity-60"
+            {isReadOnly ? (
+              <div
+                className="prose prose-sm max-w-none rounded-lg border border-border bg-bg-elevated p-4"
+                dangerouslySetInnerHTML={{ __html: htmlContent }}
               />
-            </div>
+            ) : (
+              <EmailEditor
+                value={htmlContent}
+                onChange={setHtmlContent}
+                placeholder="Write your email content here... Use the toolbar to add headings, images, YouTube videos, CTA buttons, and more."
+              />
+            )}
           </div>
 
           {/* Stats (only for sent campaigns) */}
@@ -311,6 +334,16 @@ export default function CampaignEditorPage() {
                 <p className="text-xs text-text-muted">
                   Sent: {new Date(campaign.sent_at).toLocaleString()}
                 </p>
+              )}
+              {(isFailed || isSending) && (
+                <button
+                  onClick={handleRetry}
+                  disabled={isRetrying}
+                  className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-warning px-3 py-2 text-sm font-medium text-white hover:bg-warning/90 disabled:opacity-50"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  {isRetrying ? "Retrying..." : "Retry Campaign"}
+                </button>
               )}
             </div>
           )}
@@ -392,10 +425,48 @@ export default function CampaignEditorPage() {
             )}
           </div>
 
+          {/* Test email - shown for saved campaigns */}
+          {!isReadOnly && !isNew && (
+            <div className="rounded-xl border border-border bg-bg-secondary p-6 space-y-3">
+              <h3 className="text-sm font-semibold text-foreground">Test Email</h3>
+              <p className="text-xs text-text-muted">Preview how your email looks before sending to subscribers.</p>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={testEmail}
+                  onChange={(e) => setTestEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  className="flex-1 rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-sm text-foreground focus:border-accent focus:outline-none"
+                />
+                <button
+                  onClick={() => sendTestEmail({ id, email: testEmail })}
+                  disabled={!testEmail || isSendingTest}
+                  className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-bg-hover disabled:opacity-50"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  {isSendingTest ? "Sending..." : "Send Test"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* New campaign hint */}
+          {isNew && (
+            <div className="rounded-xl border border-dashed border-border bg-bg-secondary/50 p-6 space-y-2">
+              <h3 className="text-sm font-semibold text-text-muted">How it works</h3>
+              <ol className="text-xs text-text-muted space-y-1.5 list-decimal list-inside">
+                <li>Fill in your campaign details and write your email content</li>
+                <li>Click <strong className="text-text-secondary">Save as Draft</strong> to save</li>
+                <li>Send a <strong className="text-text-secondary">Test Email</strong> to preview</li>
+                <li>Click <strong className="text-text-secondary">Send Now</strong> to deliver to subscribers</li>
+              </ol>
+            </div>
+          )}
+
           {/* Schedule / Send controls */}
           {!isReadOnly && !isNew && (
             <div className="rounded-xl border border-border bg-bg-secondary p-6 space-y-4">
-              <h3 className="text-sm font-semibold text-foreground">Send</h3>
+              <h3 className="text-sm font-semibold text-foreground">Send to Subscribers</h3>
 
               <button
                 onClick={handleSendNow}
@@ -411,14 +482,11 @@ export default function CampaignEditorPage() {
                   <span className="w-full border-t border-border" />
                 </div>
                 <div className="relative flex justify-center">
-                  <span className="bg-bg-secondary px-2 text-xs text-text-muted">or</span>
+                  <span className="bg-bg-secondary px-2 text-xs text-text-muted">or schedule</span>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-text-secondary">
-                  Schedule for
-                </label>
                 <input
                   type="datetime-local"
                   value={scheduledAt}

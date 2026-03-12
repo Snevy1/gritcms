@@ -19,9 +19,9 @@ export default function ConfirmSubscriptionPage() {
         setStatus("success");
         setMessage(data.message || "Your subscription has been confirmed!");
       })
-      .catch(() => {
+      .catch((err) => {
         setStatus("error");
-        setMessage("This confirmation link is invalid or has already been used.");
+        setMessage(err.response?.data?.error || "This confirmation link is invalid or has already been used.");
       });
   }, [token]);
 

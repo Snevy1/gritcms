@@ -165,4 +165,5 @@ export type {
   WorkflowExecution,
   ExecutionStatus,
 } from "./workflow";
+export type { PremiumGuide } from "./guide";
 // grit:types

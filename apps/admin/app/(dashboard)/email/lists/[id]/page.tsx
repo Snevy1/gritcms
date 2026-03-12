@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useEmailList, useUpdateEmailList, useSubscribers, useRemoveSubscriber, useAddSubscriber, useImportSubscribers, useExportSubscribers } from "@/hooks/use-email";
-import { ChevronLeft, Save, Trash2, Loader2, Share2, Copy, Check, X, Upload, Download, ChevronDown, Plus } from "@/lib/icons";
+import { ChevronLeft, Save, Trash2, Loader2, Share2, Copy, Check, X, Upload, Download, ChevronDown, Plus, Send } from "@/lib/icons";
 import { useConfirm } from "@/hooks/use-confirm";
 import { toast } from "sonner";
 import { ImportModal } from "@/components/import-modal";
@@ -188,6 +188,13 @@ export default function EmailListDetailPage() {
           <h1 className="text-2xl font-bold text-foreground">{list?.name || "Email List"}</h1>
           <p className="text-text-secondary mt-1">{list?.subscriber_count ?? 0} subscribers</p>
         </div>
+        <Link
+          href={`/email/campaigns/new?listId=${id}`}
+          className="flex items-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-medium text-white hover:bg-success/90 transition-colors"
+        >
+          <Send className="h-4 w-4" />
+          Send Email
+        </Link>
         <button
           onClick={() => setShowShare(true)}
           className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:bg-bg-hover transition-colors"

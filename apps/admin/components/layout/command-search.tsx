@@ -28,6 +28,7 @@ const searchItems: SearchItem[] = [
   { label: "Booking", href: "/booking", icon: "CalendarCheck", category: "Modules" },
   { label: "Affiliates", href: "/affiliates", icon: "Link", category: "Modules" },
   { label: "Automation", href: "/automation", icon: "Zap", category: "Modules" },
+  { label: "Guides", href: "/guides", icon: "BookMarked", category: "Modules" },
   { label: "Analytics", href: "/analytics", icon: "BarChart3", category: "Modules" },
   // System
   { label: "Media Library", href: "/media", icon: "Image", category: "System" },

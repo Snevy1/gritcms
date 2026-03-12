@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -16,18 +17,22 @@ import (
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
+	"gritcms/apps/api/internal/config"
 	"gritcms/apps/api/internal/events"
 	"gritcms/apps/api/internal/jobs"
+	"gritcms/apps/api/internal/mail"
 	"gritcms/apps/api/internal/models"
 )
 
 type EmailHandler struct {
-	DB   *gorm.DB
-	Jobs *jobs.Client
+	DB     *gorm.DB
+	Jobs   *jobs.Client
+	Cfg    *config.Config
+	Mailer *mail.Mailer
 }
 
-func NewEmailHandler(db *gorm.DB, jobClient *jobs.Client) *EmailHandler {
-	return &EmailHandler{DB: db, Jobs: jobClient}
+func NewEmailHandler(db *gorm.DB, jobClient *jobs.Client, cfg *config.Config, mailer *mail.Mailer) *EmailHandler {
+	return &EmailHandler{DB: db, Jobs: jobClient, Cfg: cfg, Mailer: mailer}
 }
 
 // ===== Email Lists =====
@@ -156,7 +161,14 @@ func (h *EmailHandler) Subscribe(c *gin.Context) {
 		return
 	}
 
-	// Get or create contact
+	// Load list first to check double opt-in
+	var list models.EmailList
+	if err := h.DB.First(&list, body.ListID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "List not found"})
+		return
+	}
+
+	// Get or create contact, updating name if contact already exists
 	var contact models.Contact
 	result := h.DB.Where("email = ? AND tenant_id = ?", body.Email, 1).First(&contact)
 	if result.Error == gorm.ErrRecordNotFound {
@@ -169,29 +181,78 @@ func (h *EmailHandler) Subscribe(c *gin.Context) {
 			IPAddress: c.ClientIP(),
 		}
 		h.DB.Create(&contact)
+	} else if body.FirstName != "" || body.LastName != "" {
+		updates := map[string]interface{}{}
+		if body.FirstName != "" {
+			updates["first_name"] = body.FirstName
+		}
+		if body.LastName != "" {
+			updates["last_name"] = body.LastName
+		}
+		h.DB.Model(&contact).Updates(updates)
 	}
 
-	// Check if already subscribed
+	// Check if already subscribed (include soft-deleted to handle unique index)
 	var existing models.EmailSubscription
-	if err := h.DB.Where("contact_id = ? AND email_list_id = ?", contact.ID, body.ListID).First(&existing).Error; err == nil {
+	if err := h.DB.Unscoped().Where("contact_id = ? AND email_list_id = ?", contact.ID, body.ListID).First(&existing).Error; err == nil {
+		wasSoftDeleted := existing.DeletedAt.Valid
+
+		if wasSoftDeleted {
+			// Restore soft-deleted record and re-subscribe
+			existing.DeletedAt = gorm.DeletedAt{}
+			now := time.Now()
+			existing.SubscribedAt = &now
+			existing.UnsubscribedAt = nil
+			if list.DoubleOptin {
+				existing.Status = models.SubStatusPending
+				existing.ConfirmToken = generateToken()
+				h.DB.Unscoped().Save(&existing)
+				h.sendConfirmEmail(contact, list, existing.ConfirmToken)
+				c.JSON(http.StatusOK, gin.H{"message": "Please check your email to confirm your subscription", "confirm_required": true})
+			} else {
+				existing.Status = models.SubStatusActive
+				existing.ConfirmToken = ""
+				h.DB.Unscoped().Save(&existing)
+				events.Emit(events.EmailSubscribed, existing)
+				c.JSON(http.StatusOK, gin.H{"message": "Subscribed successfully"})
+			}
+			return
+		}
+
 		if existing.Status == models.SubStatusActive {
 			c.JSON(http.StatusOK, gin.H{"message": "Already subscribed"})
 			return
 		}
-		// Re-subscribe
+		if existing.Status == models.SubStatusPending && list.DoubleOptin {
+			// Already pending — resend confirmation with the existing token
+			if existing.ConfirmToken == "" {
+				existing.ConfirmToken = generateToken()
+				h.DB.Save(&existing)
+			}
+			h.sendConfirmEmail(contact, list, existing.ConfirmToken)
+			c.JSON(http.StatusOK, gin.H{"message": "Please check your email to confirm your subscription", "confirm_required": true})
+			return
+		}
+		// Re-subscribe (e.g. from unsubscribed state)
 		now := time.Now()
-		existing.Status = models.SubStatusActive
 		existing.SubscribedAt = &now
 		existing.UnsubscribedAt = nil
-		h.DB.Save(&existing)
-		events.Emit(events.EmailSubscribed, existing)
-		c.JSON(http.StatusOK, gin.H{"message": "Subscribed successfully"})
+		if list.DoubleOptin {
+			existing.Status = models.SubStatusPending
+			if existing.ConfirmToken == "" {
+				existing.ConfirmToken = generateToken()
+			}
+			h.DB.Save(&existing)
+			h.sendConfirmEmail(contact, list, existing.ConfirmToken)
+			c.JSON(http.StatusOK, gin.H{"message": "Please check your email to confirm your subscription", "confirm_required": true})
+		} else {
+			existing.Status = models.SubStatusActive
+			h.DB.Save(&existing)
+			events.Emit(events.EmailSubscribed, existing)
+			c.JSON(http.StatusOK, gin.H{"message": "Subscribed successfully"})
+		}
 		return
 	}
-
-	// Check if list requires double opt-in
-	var list models.EmailList
-	h.DB.First(&list, body.ListID)
 
 	now := time.Now()
 	sub := models.EmailSubscription{
@@ -210,10 +271,18 @@ func (h *EmailHandler) Subscribe(c *gin.Context) {
 		sub.Status = models.SubStatusActive
 	}
 
-	h.DB.Create(&sub)
+	if err := h.DB.Create(&sub).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to subscribe"})
+		return
+	}
 
 	if sub.Status == models.SubStatusActive {
 		events.Emit(events.EmailSubscribed, sub)
+	}
+
+	// Send double opt-in confirmation email
+	if list.DoubleOptin {
+		h.sendConfirmEmail(contact, list, sub.ConfirmToken)
 	}
 
 	msg := "Subscribed successfully"
@@ -227,10 +296,17 @@ func (h *EmailHandler) Subscribe(c *gin.Context) {
 func (h *EmailHandler) ConfirmSubscription(c *gin.Context) {
 	token := c.Param("token")
 	var sub models.EmailSubscription
-	if err := h.DB.Where("confirm_token = ? AND status = ?", token, models.SubStatusPending).First(&sub).Error; err != nil {
+	if err := h.DB.Where("confirm_token = ?", token).First(&sub).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Invalid or expired confirmation token"})
 		return
 	}
+
+	// Already confirmed
+	if sub.Status == models.SubStatusActive {
+		c.JSON(http.StatusOK, gin.H{"message": "Subscription already confirmed"})
+		return
+	}
+
 	now := time.Now()
 	sub.Status = models.SubStatusActive
 	sub.SubscribedAt = &now
@@ -281,6 +357,52 @@ func (h *EmailHandler) Unsubscribe(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Unsubscribed successfully"})
 }
 
+// UnsubscribeByToken handles one-click unsubscribe via GET link in emails.
+// GET /api/email/unsubscribe/:token
+func (h *EmailHandler) UnsubscribeByToken(c *gin.Context) {
+	token := c.Param("token")
+	if token == "" {
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		c.String(http.StatusBadRequest, unsubscribePage("Invalid Link", "This unsubscribe link is invalid.", false))
+		return
+	}
+
+	var sub models.EmailSubscription
+	if err := h.DB.Where("confirm_token = ?", token).First(&sub).Error; err != nil {
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		c.String(http.StatusNotFound, unsubscribePage("Not Found", "This unsubscribe link is invalid or has already been used.", false))
+		return
+	}
+
+	if sub.Status == models.SubStatusUnsubscribed {
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		c.String(http.StatusOK, unsubscribePage("Already Unsubscribed", "You have already been unsubscribed from this list.", true))
+		return
+	}
+
+	now := time.Now()
+	sub.Status = models.SubStatusUnsubscribed
+	sub.UnsubscribedAt = &now
+	h.DB.Save(&sub)
+
+	events.Emit(events.EmailUnsubscribed, sub)
+
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.String(http.StatusOK, unsubscribePage("Unsubscribed", "You have been successfully unsubscribed. You will no longer receive emails from this list.", true))
+}
+
+func unsubscribePage(title, message string, success bool) string {
+	color := "#ef4444"
+	icon := "&#10060;"
+	if success {
+		color = "#22c55e"
+		icon = "&#10004;"
+	}
+	return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>` + title + `</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a0a;color:#e5e5e5;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}.card{background:#171717;border:1px solid #262626;border-radius:16px;padding:48px;max-width:420px;width:100%;text-align:center}.icon{font-size:48px;margin-bottom:16px}.title{font-size:24px;font-weight:700;margin-bottom:12px;color:#fafafa}.msg{font-size:15px;color:#a3a3a3;line-height:1.6}</style></head>
+<body><div class="card"><div class="icon">` + icon + `</div><h1 class="title" style="color:` + color + `">` + title + `</h1><p class="msg">` + message + `</p></div></body></html>`
+}
+
 // AdminAddSubscriber allows admins to manually add a subscriber.
 // Accepts either contact_id (existing contact) or email (creates contact if needed).
 func (h *EmailHandler) AdminAddSubscriber(c *gin.Context) {
@@ -314,6 +436,15 @@ func (h *EmailHandler) AdminAddSubscriber(c *gin.Context) {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create contact"})
 				return
 			}
+		} else if body.FirstName != "" || body.LastName != "" {
+			updates := map[string]interface{}{}
+			if body.FirstName != "" {
+				updates["first_name"] = body.FirstName
+			}
+			if body.LastName != "" {
+				updates["last_name"] = body.LastName
+			}
+			h.DB.Model(&contact).Updates(updates)
 		}
 		contactID = contact.ID
 	}
@@ -323,20 +454,61 @@ func (h *EmailHandler) AdminAddSubscriber(c *gin.Context) {
 		return
 	}
 
-	// Check for existing subscription
+	// Load list to check double opt-in
+	var list models.EmailList
+	h.DB.First(&list, listID)
+
+	// Resolve contact email for confirmation email
+	var contact models.Contact
+	h.DB.First(&contact, contactID)
+
+	// Check for existing subscription (include soft-deleted to handle unique index)
 	var existing models.EmailSubscription
-	if err := h.DB.Where("contact_id = ? AND email_list_id = ?", contactID, listID).First(&existing).Error; err == nil {
+	if err := h.DB.Unscoped().Where("contact_id = ? AND email_list_id = ?", contactID, listID).First(&existing).Error; err == nil {
+		wasSoftDeleted := existing.DeletedAt.Valid
+
+		if wasSoftDeleted {
+			// Restore soft-deleted record and re-subscribe
+			existing.DeletedAt = gorm.DeletedAt{}
+			now := time.Now()
+			existing.SubscribedAt = &now
+			existing.UnsubscribedAt = nil
+			if list.DoubleOptin {
+				existing.Status = models.SubStatusPending
+				existing.ConfirmToken = generateToken()
+				h.DB.Unscoped().Save(&existing)
+				h.sendConfirmEmail(contact, list, existing.ConfirmToken)
+				c.JSON(http.StatusOK, gin.H{"data": existing, "message": "Confirmation email sent"})
+			} else {
+				existing.Status = models.SubStatusActive
+				existing.ConfirmToken = ""
+				h.DB.Unscoped().Save(&existing)
+				c.JSON(http.StatusOK, gin.H{"data": existing})
+			}
+			return
+		}
+
 		if existing.Status == models.SubStatusActive {
 			c.JSON(http.StatusOK, gin.H{"data": existing, "message": "Already subscribed"})
 			return
 		}
-		// Reactivate
+		// Reactivate — respect double opt-in
 		now := time.Now()
-		existing.Status = models.SubStatusActive
 		existing.SubscribedAt = &now
 		existing.UnsubscribedAt = nil
-		h.DB.Save(&existing)
-		c.JSON(http.StatusOK, gin.H{"data": existing})
+		if list.DoubleOptin {
+			existing.Status = models.SubStatusPending
+			if existing.ConfirmToken == "" {
+				existing.ConfirmToken = generateToken()
+			}
+			h.DB.Save(&existing)
+			h.sendConfirmEmail(contact, list, existing.ConfirmToken)
+			c.JSON(http.StatusOK, gin.H{"data": existing, "message": "Confirmation email sent"})
+		} else {
+			existing.Status = models.SubStatusActive
+			h.DB.Unscoped().Save(&existing)
+			c.JSON(http.StatusOK, gin.H{"data": existing})
+		}
 		return
 	}
 
@@ -345,15 +517,46 @@ func (h *EmailHandler) AdminAddSubscriber(c *gin.Context) {
 		TenantID:     1,
 		ContactID:    contactID,
 		EmailListID:  uint(listID),
-		Status:       models.SubStatusActive,
 		Source:       "manual",
 		SubscribedAt: &now,
+	}
+	if list.DoubleOptin {
+		sub.Status = models.SubStatusPending
+		sub.ConfirmToken = generateToken()
+	} else {
+		sub.Status = models.SubStatusActive
 	}
 	if err := h.DB.Create(&sub).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add subscriber"})
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"data": sub})
+	if list.DoubleOptin {
+		h.sendConfirmEmail(contact, list, sub.ConfirmToken)
+		c.JSON(http.StatusCreated, gin.H{"data": sub, "message": "Confirmation email sent"})
+	} else {
+		c.JSON(http.StatusCreated, gin.H{"data": sub})
+	}
+}
+
+// sendConfirmEmail sends a double opt-in confirmation email.
+func (h *EmailHandler) sendConfirmEmail(contact models.Contact, list models.EmailList, token string) {
+	if h.Jobs == nil {
+		return
+	}
+	// Use site_name from settings, fall back to config AppName
+	appName := h.Cfg.AppName
+	var setting models.Setting
+	if err := h.DB.Where("key = ? AND tenant_id = ?", "site_name", 1).First(&setting).Error; err == nil && setting.Value != "" {
+		appName = setting.Value
+	}
+	confirmURL := fmt.Sprintf("%s/email/confirm/%s", strings.TrimRight(h.Cfg.WebURL, "/"), token)
+	_ = h.Jobs.EnqueueSendEmail(contact.Email, "Confirm your subscription", "subscription-confirm", map[string]interface{}{
+		"ConfirmURL": confirmURL,
+		"ListName":   list.Name,
+		"FirstName":  contact.FirstName,
+		"AppName":    appName,
+		"Year":       time.Now().Year(),
+	})
 }
 
 // AdminRemoveSubscriber removes a subscriber from a list.
@@ -476,7 +679,10 @@ func (h *EmailHandler) CreateCampaign(c *gin.Context) {
 	body.TenantID = 1
 	body.Status = models.CampaignStatusDraft
 	body.Stats = datatypes.JSON([]byte(`{"sent":0,"delivered":0,"opened":0,"clicked":0,"bounced":0,"unsubscribed":0}`))
-	h.DB.Create(&body)
+	if err := h.DB.Create(&body).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create campaign: " + err.Error()})
+		return
+	}
 	c.JSON(http.StatusCreated, gin.H{"data": body})
 }
 
@@ -491,11 +697,46 @@ func (h *EmailHandler) UpdateCampaign(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot edit a sent or sending campaign"})
 		return
 	}
-	if err := c.ShouldBindJSON(&campaign); err != nil {
+	// Only update allowed fields from request body
+	var body struct {
+		Name       string          `json:"name"`
+		Subject    string          `json:"subject"`
+		FromName   string          `json:"from_name"`
+		FromEmail  string          `json:"from_email"`
+		ReplyTo    string          `json:"reply_to"`
+		HTMLContent string         `json:"html_content"`
+		TextContent string         `json:"text_content"`
+		TemplateID *uint           `json:"template_id"`
+		ListIDs    datatypes.JSON  `json:"list_ids"`
+		SegmentIDs datatypes.JSON  `json:"segment_ids"`
+		TagIDs     datatypes.JSON  `json:"tag_ids"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	h.DB.Save(&campaign)
+
+	updates := map[string]interface{}{
+		"name":         body.Name,
+		"subject":      body.Subject,
+		"from_name":    body.FromName,
+		"from_email":   body.FromEmail,
+		"reply_to":     body.ReplyTo,
+		"html_content": body.HTMLContent,
+		"text_content": body.TextContent,
+		"template_id":  body.TemplateID,
+		"list_ids":     body.ListIDs,
+		"segment_ids":  body.SegmentIDs,
+		"tag_ids":      body.TagIDs,
+	}
+
+	if err := h.DB.Model(&campaign).Updates(updates).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save campaign: " + err.Error()})
+		return
+	}
+
+	// Reload to return fresh data
+	h.DB.Preload("Template").First(&campaign, id)
 	c.JSON(http.StatusOK, gin.H{"data": campaign})
 }
 
@@ -512,6 +753,40 @@ func (h *EmailHandler) DeleteCampaign(c *gin.Context) {
 	}
 	h.DB.Delete(&campaign)
 	c.JSON(http.StatusOK, gin.H{"message": "Campaign deleted"})
+}
+
+// DuplicateCampaign creates a copy of an existing campaign as a draft.
+func (h *EmailHandler) DuplicateCampaign(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	var original models.EmailCampaign
+	if err := h.DB.First(&original, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Campaign not found"})
+		return
+	}
+
+	dup := models.EmailCampaign{
+		TenantID:    1,
+		Name:        original.Name + " (Copy)",
+		Subject:     original.Subject,
+		TemplateID:  original.TemplateID,
+		FromName:    original.FromName,
+		FromEmail:   original.FromEmail,
+		ReplyTo:     original.ReplyTo,
+		HTMLContent: original.HTMLContent,
+		TextContent: original.TextContent,
+		ListIDs:     original.ListIDs,
+		SegmentIDs:  original.SegmentIDs,
+		TagIDs:      original.TagIDs,
+		Status:      models.CampaignStatusDraft,
+		Stats:       datatypes.JSON([]byte(`{"sent":0,"delivered":0,"opened":0,"clicked":0,"bounced":0,"unsubscribed":0}`)),
+	}
+
+	if err := h.DB.Create(&dup).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to duplicate campaign"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"data": dup})
 }
 
 // ScheduleCampaign sets a campaign to be sent at a specific time or immediately.
@@ -547,23 +822,215 @@ func (h *EmailHandler) ScheduleCampaign(c *gin.Context) {
 			}
 		} else {
 			// No job client (Redis not configured) — process inline in goroutine as fallback
-			go processCampaignInline(h.DB, campaign.ID)
+			go h.processCampaignInline(campaign.ID)
 		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": campaign})
 }
 
-// processCampaignInline is a fallback for when Redis/jobs are not available.
-// It sends campaign emails synchronously in a goroutine.
-func processCampaignInline(db *gorm.DB, campaignID uint) {
-	// This is a minimal fallback — the real processing is in jobs/workers.go handleCampaignProcess.
-	// Just mark as sent so it doesn't stay stuck.
+// RetryCampaign resets a stuck/failed campaign and re-enqueues it for sending.
+func (h *EmailHandler) RetryCampaign(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
 	var campaign models.EmailCampaign
-	if err := db.First(&campaign, campaignID).Error; err != nil {
+	if err := h.DB.First(&campaign, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Campaign not found"})
 		return
 	}
-	db.Model(&campaign).Update("status", models.CampaignStatusSent)
+
+	// Only allow retry for failed or stuck-sending campaigns
+	if campaign.Status != models.CampaignStatusFailed && campaign.Status != models.CampaignStatusSending {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Campaign can only be retried if it is failed or stuck in sending"})
+		return
+	}
+
+	// Delete any previous send records for this campaign so they get re-created
+	h.DB.Where("campaign_id = ?", campaign.ID).Delete(&models.EmailSend{})
+
+	// Reset to sending
+	campaign.Status = models.CampaignStatusSending
+	now := time.Now()
+	campaign.SentAt = &now
+	h.DB.Save(&campaign)
+
+	if h.Jobs != nil {
+		if err := h.Jobs.EnqueueCampaignProcess(campaign.ID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to enqueue campaign: " + err.Error()})
+			return
+		}
+	} else {
+		go h.processCampaignInline(campaign.ID)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": campaign, "message": "Campaign re-queued for sending"})
+}
+
+// processCampaignInline is a fallback for when Redis/jobs are not available.
+// It sends campaign emails in a goroutine using the handler's mailer.
+func (h *EmailHandler) processCampaignInline(campaignID uint) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("PANIC in inline campaign %d: %v\n", campaignID, r)
+			h.DB.Model(&models.EmailCampaign{}).Where("id = ?", campaignID).
+				Update("status", models.CampaignStatusFailed)
+		}
+	}()
+
+	var campaign models.EmailCampaign
+	if err := h.DB.Preload("Template").First(&campaign, campaignID).Error; err != nil {
+		return
+	}
+
+	if h.Mailer == nil {
+		h.DB.Model(&campaign).Update("status", models.CampaignStatusFailed)
+		return
+	}
+
+	// Resolve HTML content
+	htmlContent := campaign.HTMLContent
+	subject := campaign.Subject
+	if subject == "" && campaign.Template != nil {
+		subject = campaign.Template.Subject
+	}
+	if campaign.Template != nil && campaign.Template.HTMLContent != "" {
+		tmpl := campaign.Template.HTMLContent
+		tmpl = strings.ReplaceAll(tmpl, "{{subject}}", subject)
+		tmpl = strings.ReplaceAll(tmpl, "{{content}}", htmlContent)
+		htmlContent = tmpl
+	}
+	if htmlContent == "" {
+		h.DB.Model(&campaign).Update("status", models.CampaignStatusSent)
+		return
+	}
+
+	// Load social footer
+	var socialSettings []models.Setting
+	h.DB.Where("`group` = ? AND `key` LIKE ?", "theme", "social_%").Find(&socialSettings)
+	socials := map[string]string{}
+	for _, s := range socialSettings {
+		socials[s.Key] = s.Value
+	}
+	socialFooter := mail.BuildSocialFooter(socials)
+	if socialFooter != "" {
+		htmlContent += socialFooter
+	}
+
+	// Build "from"
+	from := ""
+	if campaign.FromName != "" && campaign.FromEmail != "" {
+		from = fmt.Sprintf("%s <%s>", campaign.FromName, campaign.FromEmail)
+	} else if campaign.FromEmail != "" {
+		from = campaign.FromEmail
+	}
+
+	// Collect recipients
+	recipientIDs := map[uint]bool{}
+	var listIDs []uint
+	if campaign.ListIDs != nil {
+		_ = json.Unmarshal(campaign.ListIDs, &listIDs)
+	}
+	if len(listIDs) > 0 {
+		var subs []models.EmailSubscription
+		h.DB.Where("email_list_id IN ? AND status = ?", listIDs, models.SubStatusActive).Find(&subs)
+		for _, sub := range subs {
+			recipientIDs[sub.ContactID] = true
+		}
+	}
+	var tagIDs []uint
+	if campaign.TagIDs != nil {
+		_ = json.Unmarshal(campaign.TagIDs, &tagIDs)
+	}
+	if len(tagIDs) > 0 {
+		var contactIDs []uint
+		h.DB.Raw("SELECT DISTINCT contact_id FROM contact_tags WHERE tag_id IN ?", tagIDs).Scan(&contactIDs)
+		for _, cid := range contactIDs {
+			recipientIDs[cid] = true
+		}
+	}
+
+	if len(recipientIDs) == 0 {
+		h.DB.Model(&campaign).Update("status", models.CampaignStatusSent)
+		return
+	}
+
+	ids := make([]uint, 0, len(recipientIDs))
+	for id := range recipientIDs {
+		ids = append(ids, id)
+	}
+	var contacts []models.Contact
+	h.DB.Where("id IN ?", ids).Find(&contacts)
+
+	// Build unsubscribe token map
+	contactUnsubToken := map[uint]string{}
+	if len(listIDs) > 0 {
+		var allSubs []models.EmailSubscription
+		h.DB.Where("email_list_id IN ? AND status = ?", listIDs, models.SubStatusActive).Find(&allSubs)
+		for _, sub := range allSubs {
+			if sub.ConfirmToken != "" {
+				contactUnsubToken[sub.ContactID] = sub.ConfirmToken
+			}
+		}
+	}
+
+	appURL := ""
+	if h.Cfg != nil {
+		appURL = h.Cfg.AppURL
+	}
+
+	sentCount := 0
+	failedCount := 0
+	for _, contact := range contacts {
+		if contact.Email == "" {
+			continue
+		}
+
+		recipientHTML := htmlContent
+		if token, ok := contactUnsubToken[contact.ID]; ok && appURL != "" {
+			unsubURL := strings.TrimRight(appURL, "/") + "/api/email/unsubscribe/" + token
+			recipientHTML = strings.ReplaceAll(recipientHTML, "{{unsubscribe_url}}", unsubURL)
+		}
+		recipientHTML = strings.ReplaceAll(recipientHTML, "{{unsubscribe_url}}", "#")
+
+		emailB64 := base64.URLEncoding.EncodeToString([]byte(contact.Email))
+		recipientHTML = strings.ReplaceAll(recipientHTML, "{{subscriber_email_b64}}", emailB64)
+		recipientHTML = mail.PrepareEmailHTML(recipientHTML)
+
+		now := time.Now()
+		send := models.EmailSend{
+			TenantID:   1,
+			ContactID:  contact.ID,
+			CampaignID: &campaign.ID,
+			Subject:    subject,
+			Status:     models.SendStatusQueued,
+			SentAt:     &now,
+		}
+		h.DB.Create(&send)
+
+		messageID, err := h.Mailer.SendCampaignEmail(nil, mail.CampaignEmailOptions{
+			From:     from,
+			ReplyTo:  campaign.ReplyTo,
+			To:       contact.Email,
+			Subject:  subject,
+			HTMLBody: recipientHTML,
+		})
+		if err != nil {
+			h.DB.Model(&send).Update("status", models.SendStatusFailed)
+			failedCount++
+			continue
+		}
+		h.DB.Model(&send).Updates(map[string]interface{}{
+			"status":      models.SendStatusSent,
+			"external_id": messageID,
+		})
+		sentCount++
+	}
+
+	stats := models.CampaignStats{Sent: sentCount, Bounced: failedCount}
+	statsJSON, _ := json.Marshal(stats)
+	h.DB.Model(&models.EmailCampaign{}).Where("id = ?", campaign.ID).Updates(map[string]interface{}{
+		"status": models.CampaignStatusSent,
+		"stats":  datatypes.JSON(statsJSON),
+	})
 }
 
 // GetCampaignStats returns analytics for a campaign.
@@ -1171,4 +1638,89 @@ func (h *EmailHandler) ExportSubscribers(c *gin.Context) {
 			subscribedAt + "\n"
 		c.Writer.WriteString(line)
 	}
+}
+
+// SendTestEmail sends a test email for a campaign to a single address.
+func (h *EmailHandler) SendTestEmail(c *gin.Context) {
+	if h.Mailer == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Mailer not configured"})
+		return
+	}
+
+	id, _ := strconv.Atoi(c.Param("id"))
+	var body struct {
+		Email string `json:"email" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Email is required"})
+		return
+	}
+
+	var campaign models.EmailCampaign
+	if err := h.DB.Preload("Template").First(&campaign, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Campaign not found"})
+		return
+	}
+
+	// Resolve HTML content
+	htmlContent := campaign.HTMLContent
+	subject := campaign.Subject
+	if subject == "" && campaign.Template != nil {
+		subject = campaign.Template.Subject
+	}
+
+	// If a template is selected, use it as a layout wrapper and substitute placeholders
+	if campaign.Template != nil && campaign.Template.HTMLContent != "" {
+		tmpl := campaign.Template.HTMLContent
+		tmpl = strings.ReplaceAll(tmpl, "{{subject}}", subject)
+		tmpl = strings.ReplaceAll(tmpl, "{{content}}", htmlContent)
+		htmlContent = tmpl
+	}
+	if htmlContent == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Campaign has no content"})
+		return
+	}
+
+	from := ""
+	if campaign.FromEmail != "" && strings.Contains(campaign.FromEmail, "@") {
+		if campaign.FromName != "" {
+			from = fmt.Sprintf("%s <%s>", campaign.FromName, campaign.FromEmail)
+		} else {
+			from = campaign.FromEmail
+		}
+	}
+	// If from is empty, SendCampaignEmail falls back to default mailer from address
+
+	// Replace unsubscribe placeholder with a no-op link for test emails
+	htmlContent = strings.ReplaceAll(htmlContent, "{{unsubscribe_url}}", "#")
+
+	// Replace subscriber email merge tag with test email for guide access links
+	testEmailB64 := base64.URLEncoding.EncodeToString([]byte(body.Email))
+	htmlContent = strings.ReplaceAll(htmlContent, "{{subscriber_email_b64}}", testEmailB64)
+
+	// Transform editor HTML to email-safe HTML (YouTube iframes → thumbnails, CTA buttons, strip classes)
+	htmlContent = mail.PrepareEmailHTML(htmlContent)
+
+	// Append social media footer from settings
+	var socialSettings []models.Setting
+	h.DB.Where("`group` = ? AND `key` LIKE ?", "theme", "social_%").Find(&socialSettings)
+	socials := map[string]string{}
+	for _, s := range socialSettings {
+		socials[s.Key] = s.Value
+	}
+	if footer := mail.BuildSocialFooter(socials); footer != "" {
+		htmlContent += footer
+	}
+
+	_, err := h.Mailer.SendCampaignEmail(c.Request.Context(), mail.CampaignEmailOptions{
+		From:     from,
+		To:       body.Email,
+		Subject:  "[TEST] " + subject,
+		HTMLBody: htmlContent,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send test email: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Test email sent to " + body.Email})
 }
