@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hibiken/asynq"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
 	"gritcms/apps/api/internal/cache"
@@ -370,9 +371,9 @@ func handleCampaignProcess(deps WorkerDeps) func(ctx context.Context, task *asyn
 			Bounced: failedCount,
 		}
 		statsJSON, _ := json.Marshal(stats)
-		deps.DB.Model(&campaign).Updates(map[string]interface{}{
+		deps.DB.Model(&models.EmailCampaign{}).Where("id = ?", campaign.ID).Updates(map[string]interface{}{
 			"status": models.CampaignStatusSent,
-			"stats":  statsJSON,
+			"stats":  datatypes.JSON(statsJSON),
 		})
 
 		log.Printf("Campaign %d complete: %d sent, %d failed", payload.CampaignID, sentCount, failedCount)

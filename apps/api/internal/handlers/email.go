@@ -1027,9 +1027,9 @@ func (h *EmailHandler) processCampaignInline(campaignID uint) {
 
 	stats := models.CampaignStats{Sent: sentCount, Bounced: failedCount}
 	statsJSON, _ := json.Marshal(stats)
-	h.DB.Model(&campaign).Updates(map[string]interface{}{
+	h.DB.Model(&models.EmailCampaign{}).Where("id = ?", campaign.ID).Updates(map[string]interface{}{
 		"status": models.CampaignStatusSent,
-		"stats":  statsJSON,
+		"stats":  datatypes.JSON(statsJSON),
 	})
 }
 
