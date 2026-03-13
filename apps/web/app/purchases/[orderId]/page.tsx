@@ -68,13 +68,12 @@ export default function PurchaseDetailPage() {
     );
   }
 
-  const allFiles = purchase.items.flatMap((item) =>
-    (item.product?.downloadable_files || []).map((file) => ({
-      ...file,
-      productName: item.product?.name || "Product",
-    }))
-  );
-
+  const allFiles = purchase.items.flatMap((item: typeof purchase.items[number]) =>
+  (item.product?.downloadable_files || []).map((file) => ({
+    ...file,
+    productName: item.product?.name || "Product",
+  }))
+);
   return (
     <div className="mx-auto max-w-3xl px-6 py-16">
       {/* Back link */}
