@@ -89,9 +89,9 @@ type Config struct {
 	MPesaPasskey        string
 
 	// PayPal — Payment processing
-	PayPalClientID     string
-	PayPalClientSecret string
-	PayPalEnvironment  string
+	PayPalClientID     string	
+    PayPalSecret   string
+    PayPalMode     string // "sandbox" or "live"
 }
 
 // Load reads configuration from environment variables.
@@ -157,9 +157,9 @@ func Load() (*Config, error) {
 		MPesaShortcode:      getEnv("MPESA_SHORTCODE", ""),
 		MPesaPasskey:        getEnv("MPESA_PASSKEY", ""),
 
-		PayPalClientID:     getEnv("PAYPAL_CLIENT_ID", ""),
-		PayPalClientSecret: getEnv("PAYPAL_CLIENT_SECRET", ""),
-		PayPalEnvironment:  getEnv("PAYPAL_ENVIRONMENT", "sandbox"),
+		PayPalClientID: getEnv("PAYPAL_CLIENT_ID", ""),
+        PayPalSecret:   getEnv("PAYPAL_SECRET", ""),
+        PayPalMode:     getEnv("PAYPAL_MODE", "sandbox"),
 	}
 
 	if cfg.DatabaseURL == "" {
