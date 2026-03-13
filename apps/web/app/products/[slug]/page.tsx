@@ -252,7 +252,7 @@ export default function ProductDetailPage() {
                     If you are not redirected automatically, click below.
                   </p>
                   {checkoutData.approval_url && (
-                    
+                    <a
                       href={checkoutData.approval_url}
                       className="inline-flex items-center gap-2 rounded-xl bg-blue-500 px-6 py-3 font-semibold text-white hover:bg-blue-600 transition-colors"
                     >
