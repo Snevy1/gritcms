@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Download, Package, CheckCircle, Loader2, FileText } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useMyPurchase } from "@/hooks/use-purchases";
+import type { PurchaseData, OrderItem, DownloadableFile } from "@repo/shared/types";
 
 function formatCurrency(amount: number, currency = "USD") {
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount / 100);
@@ -68,12 +69,13 @@ export default function PurchaseDetailPage() {
     );
   }
 
-  const allFiles = purchase.items.flatMap((item: typeof purchase.items[number]) =>
-  (item.product?.downloadable_files || [] as NonNullable<typeof item.product>["downloadable_files"]).map((file: NonNullable<typeof item.product>["downloadable_files"][number]) => ({
+  const allFiles = (purchase as PurchaseData).items.flatMap((item: OrderItem) => {
+  const files: DownloadableFile[] = item.product?.downloadable_files ?? [];
+  return files.map((file: DownloadableFile) => ({
     ...file,
-    productName: item.product?.name || "Product",
-  }))
-);
+    productName: item.product?.name ?? "Product",
+  }));
+});
   return (
     <div className="mx-auto max-w-3xl px-6 py-16">
       {/* Back link */}
