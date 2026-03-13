@@ -46,7 +46,7 @@ export function useCheckoutStatus(orderId: number | null) {
       return data.data as CheckoutStatus;
     },
     enabled: !!orderId,
-    refetchInterval: (query) => {
+    refetchInterval: (query: any) => {
       const status = query.state.data?.status;
       if (status === "paid" || status === "failed") return false;
       return 2000;

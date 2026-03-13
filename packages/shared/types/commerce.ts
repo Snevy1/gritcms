@@ -181,6 +181,7 @@ export interface CheckoutStatus {
   order_number: string;
   status: string;
   total: number;
+   items?: OrderItem[];
 }
 
 // --- Revenue Dashboard ---
