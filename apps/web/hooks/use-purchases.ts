@@ -2,7 +2,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { PurchaseData } from "@repo/shared/types";
+import type { PurchaseData } from "@/app/purchases/[orderId]/page";
+
+
+
 
 export function useMyPurchases() {
   return useQuery({
