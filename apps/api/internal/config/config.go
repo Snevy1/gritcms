@@ -55,14 +55,14 @@ type Config struct {
 
 	// Security (Sentinel)
 	SentinelEnabled   bool
-	SentinelUsername   string
+	SentinelUsername  string
 	SentinelPassword  string
 	SentinelSecretKey string
 
 	// Observability (Pulse)
-	PulseEnabled   bool
-	PulseUsername   string
-	PulsePassword  string
+	PulseEnabled  bool
+	PulseUsername string
+	PulsePassword string
 
 	// OAuth2 Social Login
 	GoogleClientID     string
@@ -80,6 +80,18 @@ type Config struct {
 	StripeSecretKey      string
 	StripePublishableKey string
 	StripeWebhookSecret  string
+
+	// M-Pesa — Payment processing
+	MPesaEnvironment    string
+	MPesaConsumerKey    string
+	MPesaConsumerSecret string
+	MPesaShortcode      string
+	MPesaPasskey        string
+
+	// PayPal — Payment processing
+	PayPalClientID     string
+	PayPalClientSecret string
+	PayPalEnvironment  string
 }
 
 // Load reads configuration from environment variables.
@@ -117,7 +129,7 @@ func Load() (*Config, error) {
 		AIModel:    getEnv("AI_MODEL", "claude-sonnet-4-5-20250929"),
 
 		SentinelEnabled:   getEnv("SENTINEL_ENABLED", "true") == "true",
-		SentinelUsername:   getEnv("SENTINEL_USERNAME", "admin"),
+		SentinelUsername:  getEnv("SENTINEL_USERNAME", "admin"),
 		SentinelPassword:  getEnv("SENTINEL_PASSWORD", "sentinel"),
 		SentinelSecretKey: getEnv("SENTINEL_SECRET_KEY", "sentinel-secret-change-me"),
 
@@ -138,7 +150,7 @@ func Load() (*Config, error) {
 		StripeSecretKey:      getEnv("STRIPE_SECRET_KEY", ""),
 		StripePublishableKey: getEnv("STRIPE_PUBLISHABLE_KEY", ""),
 		StripeWebhookSecret:  getEnv("STRIPE_WEBHOOK_SECRET", ""),
-		
+
 		MPesaEnvironment:    getEnv("MPESA_ENVIRONMENT", "sandbox"),
 		MPesaConsumerKey:    getEnv("MPESA_CONSUMER_KEY", ""),
 		MPesaConsumerSecret: getEnv("MPESA_CONSUMER_SECRET", ""),
