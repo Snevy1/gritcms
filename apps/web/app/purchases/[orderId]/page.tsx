@@ -69,7 +69,7 @@ export default function PurchaseDetailPage() {
   }
 
   const allFiles = purchase.items.flatMap((item: typeof purchase.items[number]) =>
-  (item.product?.downloadable_files || []).map((file) => ({
+  (item.product?.downloadable_files || [] as NonNullable<typeof item.product>["downloadable_files"]).map((file: NonNullable<typeof item.product>["downloadable_files"][number]) => ({
     ...file,
     productName: item.product?.name || "Product",
   }))
