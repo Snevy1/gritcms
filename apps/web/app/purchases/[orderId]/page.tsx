@@ -6,35 +6,32 @@ import { ArrowLeft, Download, Package, CheckCircle, Loader2, FileText } from "lu
 import { useAuth } from "@/hooks/use-auth";
 import { useMyPurchase } from "@/hooks/use-purchases";
 
-
 export type DownloadableFile = {
   url: string;
   name: string;
 };
 
-
 export type Variant = {
-  id: number
+  id: number;
   name: string;
   price_override?: number | null;
 };
-
-
 
 export type DownloadableFileWithProduct = DownloadableFile & {
   productName: string;
 };
 
 export type Order = {
-  id: number
+  id: number;
   order_number: string;
   paid_at?: string;
   created_at: string;
   total: number;
   currency: string;
 };
+
 export type Price = {
-  id: number
+  id: number;
   amount: number;
   currency: string;
   type?: string;
@@ -43,7 +40,7 @@ export type Price = {
 };
 
 export type Product = {
-  id: number
+  id: number;
   slug: string;
   name: string;
   type: string;
@@ -55,7 +52,7 @@ export type Product = {
 };
 
 export type OrderItem = {
-  id: number
+  id: number;
   quantity: number;
   unit_price: number;
   total: number;
@@ -129,13 +126,16 @@ export default function PurchaseDetailPage() {
     );
   }
 
-  const allFiles = (purchase as PurchaseData).items.flatMap((item: OrderItem) => {
-  const files: DownloadableFile[] = item.product?.downloadable_files ?? [];
-  return files.map((file: DownloadableFile) => ({
-    ...file,
-    productName: item.product?.name ?? "Product",
-  }));
-});
+  const typedPurchase = purchase as PurchaseData;
+  
+  const allFiles: DownloadableFileWithProduct[] = typedPurchase.items.flatMap((item: OrderItem) => {
+    const files: DownloadableFile[] = item.product?.downloadable_files ?? [];
+    return files.map((file: DownloadableFile) => ({
+      ...file,
+      productName: item.product?.name ?? "Product",
+    }));
+  });
+
   return (
     <div className="mx-auto max-w-3xl px-6 py-16">
       {/* Back link */}
@@ -152,7 +152,7 @@ export default function PurchaseDetailPage() {
         <div className="flex items-start justify-between mb-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Order Details</h1>
-            <p className="mt-1 text-sm text-text-muted font-mono">{purchase.order.order_number}</p>
+            <p className="mt-1 text-sm text-text-muted font-mono">{typedPurchase.order.order_number}</p>
           </div>
           <span className="rounded-full bg-green-500/10 px-3 py-1 text-xs font-medium text-green-400 flex items-center gap-1.5">
             <CheckCircle className="h-3.5 w-3.5" />
@@ -164,13 +164,13 @@ export default function PurchaseDetailPage() {
           <div>
             <span className="text-text-muted">Date</span>
             <p className="mt-0.5 text-foreground">
-              {purchase.order.paid_at ? formatDate(purchase.order.paid_at) : formatDate(purchase.order.created_at)}
+              {typedPurchase.order.paid_at ? formatDate(typedPurchase.order.paid_at) : formatDate(typedPurchase.order.created_at)}
             </p>
           </div>
           <div>
             <span className="text-text-muted">Total</span>
             <p className="mt-0.5 text-foreground font-semibold">
-              {formatCurrency(purchase.order.total, purchase.order.currency)}
+              {formatCurrency(typedPurchase.order.total, typedPurchase.order.currency)}
             </p>
           </div>
         </div>
@@ -180,7 +180,7 @@ export default function PurchaseDetailPage() {
       <div className="rounded-xl border border-border bg-bg-elevated p-6 mb-8">
         <h2 className="text-sm font-semibold text-foreground mb-4">Items</h2>
         <div className="divide-y divide-border">
-          {purchase.items.map((item) => (
+          {typedPurchase.items.map((item: OrderItem) => (
             <div key={item.id} className="flex items-center gap-4 py-4 first:pt-0 last:pb-0">
               <div className="h-14 w-14 rounded-lg bg-bg-hover overflow-hidden flex-shrink-0">
                 {item.product?.images?.[0] ? (
@@ -198,11 +198,11 @@ export default function PurchaseDetailPage() {
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-foreground truncate">{item.product?.name || "Product"}</p>
                 <p className="text-xs text-text-muted">
-                  Qty: {item.quantity} &middot; {formatCurrency(item.unit_price, purchase.order.currency)}
+                  Qty: {item.quantity} &middot; {formatCurrency(item.unit_price, typedPurchase.order.currency)}
                 </p>
               </div>
               <div className="text-sm font-medium text-foreground">
-                {formatCurrency(item.total, purchase.order.currency)}
+                {formatCurrency(item.total, typedPurchase.order.currency)}
               </div>
             </div>
           ))}
@@ -217,7 +217,7 @@ export default function PurchaseDetailPage() {
             Downloadable Files
           </h2>
           <div className="space-y-1">
-            {allFiles.map((file, idx) => (
+            {allFiles.map((file: DownloadableFileWithProduct, idx: number) => (
               <a
                 key={idx}
                 href={file.url}
@@ -229,7 +229,7 @@ export default function PurchaseDetailPage() {
                   <FileText className="h-5 w-5 text-text-muted flex-shrink-0" />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
-                    {purchase.items.length > 1 && (
+                    {typedPurchase.items.length > 1 && (
                       <p className="text-xs text-text-muted truncate">{file.productName}</p>
                     )}
                   </div>
