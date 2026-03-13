@@ -176,7 +176,7 @@ export type DownloadableFile = {
 };
 
 export type Price = {
-  id: number | string;
+  id: number
   amount: number;
   currency: string;
   type?: string;
@@ -185,13 +185,13 @@ export type Price = {
 };
 
 export type Variant = {
-  id: number | string;
+  id: number
   name: string;
   price_override?: number | null;
 };
 
 export type Product = {
-  id: number | string;
+  id: number
   name: string;
   type: string;
   description?: string;
@@ -206,7 +206,7 @@ export type DownloadableFileWithProduct = DownloadableFile & {
 };
 
 export type Order = {
-  id: number | string;
+  id: number
   order_number: string;
   paid_at?: string;
   created_at: string;
@@ -215,7 +215,7 @@ export type Order = {
 };
 
 export type OrderItem = {
-  id: number | string;
+  id: number
   quantity: number;
   unit_price: number;
   total: number;
