@@ -175,8 +175,11 @@ export type DownloadableFile = {
   name: string;
 };
 
+export type ProductType = "course" | "download" | "membership" | "bundle";
+
 export type Product = {
   name: string;
+  type: ProductType | string;  // string fallback handles any unlisted types
   images?: string[];
   downloadable_files?: DownloadableFile[];
   prices?: Price[];
