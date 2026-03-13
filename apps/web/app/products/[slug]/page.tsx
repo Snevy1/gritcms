@@ -11,6 +11,8 @@ import {
   Zap,
   Download,
   RefreshCw,
+  CreditCard,
+  Smartphone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { usePublicProduct } from "@/hooks/use-commerce";
@@ -132,13 +134,15 @@ export default function ProductDetailPage() {
           </div>
 
           {images.length > 1 && (
-            <div className="mt-4 flex gap-2 overflow-x-auto">
+            <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
               {images.map((img: string, i: number) => (
                 <button
                   key={i}
                   onClick={() => setSelectedImage(i)}
-                  className={`h-16 w-16 shrink-0 rounded-lg border overflow-hidden transition-colors ${
-                    selectedImage === i ? "border-accent" : "border-border hover:border-accent/40"
+                  className={`h-16 w-16 shrink-0 rounded-lg border-2 overflow-hidden transition-all ${
+                    selectedImage === i
+                      ? "border-accent scale-105"
+                      : "border-border hover:border-accent/40"
                   }`}
                 >
                   <img
@@ -162,17 +166,17 @@ export default function ProductDetailPage() {
 
           {/* Price */}
           {primaryPrice && (
-            <div className="mt-4">
+            <div className="mt-4 flex items-baseline gap-2 flex-wrap">
               <span className="text-3xl font-bold text-foreground">
                 {formatPrice(primaryPrice.amount, primaryPrice.currency ?? "USD")}
               </span>
               {primaryPrice.type === "subscription" && (
-                <span className="text-lg text-text-muted ml-1">
+                <span className="text-lg text-text-muted">
                   /{primaryPrice.interval ?? "month"}
                 </span>
               )}
               {primaryPrice.trial_days > 0 && (
-                <span className="ml-3 rounded-full bg-green-500/10 px-3 py-1 text-xs font-medium text-green-400">
+                <span className="rounded-full bg-green-500/10 px-3 py-1 text-xs font-medium text-green-400">
                   {primaryPrice.trial_days}-day free trial
                 </span>
               )}
@@ -183,13 +187,18 @@ export default function ProductDetailPage() {
           {prices.length > 1 && (
             <div className="mt-3 flex flex-wrap gap-2">
               {prices.slice(1).map((price: Price) => (
-                <span
+                <button
                   key={String(price.id)}
-                  className="rounded-lg border border-border bg-bg-secondary px-3 py-1.5 text-sm text-text-secondary"
+                  onClick={() => setSelectedPriceId(Number(price.id))}
+                  className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                    selectedPriceId === Number(price.id)
+                      ? "border-accent bg-accent/10 text-accent"
+                      : "border-border bg-bg-secondary text-text-secondary hover:border-accent/40"
+                  }`}
                 >
                   {formatPrice(price.amount, price.currency ?? "USD")}
                   {price.type === "subscription" && `/${price.interval ?? "mo"}`}
-                </span>
+                </button>
               ))}
             </div>
           )}
@@ -222,22 +231,30 @@ export default function ProductDetailPage() {
           {checkoutData ? (
             <div className="mt-8">
               {checkoutData.provider === "mpesa" ? (
-                <div className="rounded-xl border border-border bg-bg-elevated p-6 text-center">
-                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10">
+                <div className="rounded-xl border border-border bg-bg-elevated p-8 text-center">
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10 ring-4 ring-green-500/5">
                     <Check className="h-8 w-8 text-green-500" />
                   </div>
-                  <h3 className="text-xl font-bold text-foreground">Pending Payment</h3>
-                  <p className="mt-2 text-text-secondary">{checkoutData.message}</p>
-                  <p className="mt-4 text-sm text-text-muted animate-pulse">Waiting for M-Pesa confirmation...</p>
+                  <h3 className="text-xl font-bold text-foreground">Check Your Phone</h3>
+                  <p className="mt-2 text-text-secondary text-sm leading-relaxed">{checkoutData.message}</p>
+                  <div className="mt-5 flex items-center justify-center gap-2 text-sm text-text-muted">
+                    <span className="inline-block h-2 w-2 rounded-full bg-green-400 animate-pulse" />
+                    Waiting for M-Pesa confirmation...
+                  </div>
                 </div>
               ) : checkoutData.provider === "paypal" ? (
-                <div className="rounded-xl border border-border bg-bg-elevated p-6 text-center">
-                  <h3 className="text-xl font-bold text-foreground mb-4">Redirecting to PayPal...</h3>
-                  <p className="text-text-secondary mb-4">If you are not redirected automatically, click the button below.</p>
+                <div className="rounded-xl border border-border bg-bg-elevated p-8 text-center">
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-500/10">
+                    <span className="text-2xl font-bold text-blue-400">P</span>
+                  </div>
+                  <h3 className="text-xl font-bold text-foreground mb-2">Redirecting to PayPal</h3>
+                  <p className="text-text-secondary text-sm mb-6">
+                    If you are not redirected automatically, click below.
+                  </p>
                   {checkoutData.approval_url && (
                     
                       href={checkoutData.approval_url}
-                      className="inline-block rounded-xl bg-blue-500 px-6 py-3 font-semibold text-white hover:bg-blue-600 transition-colors"
+                      className="inline-flex items-center gap-2 rounded-xl bg-blue-500 px-6 py-3 font-semibold text-white hover:bg-blue-600 transition-colors"
                     >
                       Continue to PayPal
                     </a>
@@ -271,56 +288,68 @@ export default function ProductDetailPage() {
             </div>
           ) : (
             <div className="mt-8 space-y-4">
+              {/* Payment method picker */}
               <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">Payment Method</label>
+                <label className="text-sm font-medium text-foreground mb-2 block">
+                  Payment Method
+                </label>
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     onClick={() => setProvider("stripe")}
-                    className={`px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${
+                    className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border text-xs font-medium transition-all ${
                       provider === "stripe"
-                        ? "border-accent bg-accent/10 text-accent"
-                        : "border-border text-text-secondary hover:border-accent/40"
+                        ? "border-accent bg-accent/10 text-accent shadow-sm"
+                        : "border-border text-text-secondary hover:border-accent/40 hover:bg-bg-hover"
                     }`}
                   >
-                    Card (Stripe)
+                    <CreditCard className="h-4 w-4" />
+                    Card
                   </button>
                   <button
                     onClick={() => setProvider("mpesa")}
-                    className={`px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${
+                    className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border text-xs font-medium transition-all ${
                       provider === "mpesa"
-                        ? "border-green-500 bg-green-500/10 text-green-500"
-                        : "border-border text-text-secondary hover:border-green-500/40"
+                        ? "border-green-500 bg-green-500/10 text-green-500 shadow-sm"
+                        : "border-border text-text-secondary hover:border-green-500/40 hover:bg-bg-hover"
                     }`}
                   >
+                    <Smartphone className="h-4 w-4" />
                     M-Pesa
                   </button>
                   <button
                     onClick={() => setProvider("paypal")}
-                    className={`px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${
+                    className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border text-xs font-medium transition-all ${
                       provider === "paypal"
-                        ? "border-blue-500 bg-blue-500/10 text-blue-500"
-                        : "border-border text-text-secondary hover:border-blue-500/40"
+                        ? "border-blue-500 bg-blue-500/10 text-blue-500 shadow-sm"
+                        : "border-border text-text-secondary hover:border-blue-500/40 hover:bg-bg-hover"
                     }`}
                   >
+                    <span className="text-sm font-bold leading-none">P</span>
                     PayPal
                   </button>
                 </div>
               </div>
 
+              {/* M-Pesa phone input */}
               {provider === "mpesa" && (
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-1 block">Phone Number</label>
+                  <label className="text-sm font-medium text-foreground mb-1 block">
+                    M-Pesa Phone Number
+                  </label>
                   <input
                     type="tel"
                     placeholder="e.g. 254712345678"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="w-full rounded-xl border border-border bg-bg-secondary px-4 py-3 text-sm text-foreground focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                    className="w-full rounded-xl border border-border bg-bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 transition-all"
                   />
-                  <p className="mt-1 text-xs text-text-muted">Enter your M-Pesa registered phone number.</p>
+                  <p className="mt-1.5 text-xs text-text-muted">
+                    Enter your Safaricom M-Pesa registered number with country code.
+                  </p>
                 </div>
               )}
 
+              {/* Buy button */}
               <button
                 onClick={() => {
                   if (!isAuthenticated) {
@@ -336,7 +365,7 @@ export default function ProductDetailPage() {
                       type: "product",
                       product_id: typedProduct.id,
                       price_id: selectedPriceId ?? primaryPrice?.id,
-                      provider: provider,
+                      provider,
                       phone: provider === "mpesa" ? phone : undefined,
                     },
                     {
@@ -351,38 +380,44 @@ export default function ProductDetailPage() {
                   );
                 }}
                 disabled={checkingOut}
-                className="w-full rounded-xl bg-accent px-6 py-3.5 text-base font-semibold text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
+                className="w-full rounded-xl bg-accent px-6 py-3.5 text-base font-semibold text-white hover:bg-accent/90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {checkingOut
                   ? "Preparing checkout..."
                   : typedProduct.type === "membership"
-                  ? "Join Now"
+                  ? `Join Now — ${primaryPrice ? formatPrice(primaryPrice.amount, primaryPrice.currency ?? "USD") : ""}`
                   : typedProduct.type === "service"
                   ? "Book Now"
-                  : "Buy Now"}
+                  : `Buy Now${primaryPrice ? ` — ${formatPrice(primaryPrice.amount, primaryPrice.currency ?? "USD")}` : ""}`}
               </button>
+
+              {!isAuthenticated && (
+                <p className="text-center text-xs text-text-muted">
+                  You&apos;ll be asked to sign in before completing your purchase.
+                </p>
+              )}
             </div>
           )}
 
           {/* Trust signals */}
           <div className="mt-6 grid grid-cols-2 gap-3">
             <div className="flex items-center gap-2 text-xs text-text-muted">
-              <Shield className="h-4 w-4 text-green-400" />
+              <Shield className="h-4 w-4 text-green-400 shrink-0" />
               Secure checkout
             </div>
             <div className="flex items-center gap-2 text-xs text-text-muted">
-              <Zap className="h-4 w-4 text-accent" />
+              <Zap className="h-4 w-4 text-accent shrink-0" />
               Instant delivery
             </div>
             {typedProduct.type === "digital" && (
               <div className="flex items-center gap-2 text-xs text-text-muted">
-                <Download className="h-4 w-4 text-accent" />
+                <Download className="h-4 w-4 text-accent shrink-0" />
                 Downloadable files
               </div>
             )}
             {primaryPrice?.type === "subscription" && (
               <div className="flex items-center gap-2 text-xs text-text-muted">
-                <RefreshCw className="h-4 w-4 text-accent" />
+                <RefreshCw className="h-4 w-4 text-accent shrink-0" />
                 Cancel anytime
               </div>
             )}
@@ -392,21 +427,24 @@ export default function ProductDetailPage() {
           {typedProduct.description && (
             <div className="mt-8 pt-8 border-t border-border/50">
               <h2 className="text-lg font-semibold text-foreground mb-3">Description</h2>
-              <div className="text-text-secondary leading-relaxed whitespace-pre-line">
+              <div className="text-text-secondary leading-relaxed whitespace-pre-line text-sm">
                 {typedProduct.description}
               </div>
             </div>
           )}
 
-          {/* Downloadable files */}
+          {/* Downloadable files preview */}
           {typedProduct.downloadable_files && typedProduct.downloadable_files.length > 0 && (
             <div className="mt-6 pt-6 border-t border-border/50">
-              <h3 className="text-sm font-semibold text-foreground mb-2">Included Files</h3>
-              <div className="space-y-1">
+              <h3 className="text-sm font-semibold text-foreground mb-3">Included Files</h3>
+              <div className="space-y-2">
                 {typedProduct.downloadable_files.map((file, i: number) => (
-                  <div key={i} className="flex items-center gap-2 text-sm text-text-secondary">
-                    <Download className="h-3.5 w-3.5 text-accent" />
-                    {file.name}
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 rounded-lg border border-border bg-bg-elevated px-3 py-2.5 text-sm text-text-secondary"
+                  >
+                    <Download className="h-3.5 w-3.5 text-accent shrink-0" />
+                    <span className="truncate">{file.name}</span>
                   </div>
                 ))}
               </div>
