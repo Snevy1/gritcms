@@ -179,6 +179,8 @@ export type Product = {
   name: string;
   images?: string[];
   downloadable_files?: DownloadableFile[];
+  prices?: Price[];
+  variants?: Variant[];
 };
 
 export type OrderItem = {
@@ -201,3 +203,17 @@ export type PurchaseData = {
   order: Order;
   items: OrderItem[];
 };
+
+export type Price = {
+  id: number | string;
+  amount: number;
+  currency?: string;
+  [key: string]: unknown;
+};
+
+export type Variant = {
+  id: number | string;
+  name: string;
+  [key: string]: unknown;
+};
+
