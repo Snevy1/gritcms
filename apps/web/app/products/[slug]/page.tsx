@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   ShoppingBag,
   Check,
-  Star,
   Shield,
   Zap,
   Download,
@@ -19,7 +18,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useCreateCheckout, useConfirmCheckout, useCheckoutStatus } from "@/hooks/use-checkout";
 import { StripeProvider } from "@/components/stripe-provider";
 import { CheckoutForm } from "@/components/checkout-form";
-import type { CheckoutResponse } from "@repo/shared/types";
+import type { CheckoutResponse, Product, Price, Variant } from "@repo/shared/types";
 
 function formatPrice(amount: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
@@ -98,10 +97,11 @@ export default function ProductDetailPage() {
     );
   }
 
-  const images = product.images ?? [];
-  const prices = product.prices ?? [];
-  const variants = product.variants ?? [];
-  const primaryPrice = prices[0];
+  const typedProduct = product as Product;
+  const images: string[] = typedProduct.images ?? [];
+  const prices: Price[] = typedProduct.prices ?? [];
+  const variants: Variant[] = typedProduct.variants ?? [];
+  const primaryPrice: Price | undefined = prices[0];
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-16">
@@ -120,8 +120,8 @@ export default function ProductDetailPage() {
           <div className="aspect-square rounded-xl border border-border overflow-hidden bg-bg-elevated">
             {images.length > 0 ? (
               <img
-                src={images[selectedImage] || images[0]}
-                alt={product.name}
+                src={images[selectedImage] ?? images[0]}
+                alt={typedProduct.name}
                 className="h-full w-full object-cover"
               />
             ) : (
@@ -133,18 +133,17 @@ export default function ProductDetailPage() {
 
           {images.length > 1 && (
             <div className="mt-4 flex gap-2 overflow-x-auto">
-              {images.map((img, i) => (
+              {images.map((img: string, i: number) => (
                 <button
                   key={i}
                   onClick={() => setSelectedImage(i)}
-                  className={`h-16 w-16 shrink-0 rounded-lg border overflow-hidden transition-colors ${selectedImage === i
-                      ? "border-accent"
-                      : "border-border hover:border-accent/40"
-                    }`}
+                  className={`h-16 w-16 shrink-0 rounded-lg border overflow-hidden transition-colors ${
+                    selectedImage === i ? "border-accent" : "border-border hover:border-accent/40"
+                  }`}
                 >
                   <img
                     src={img}
-                    alt={`${product.name} ${i + 1}`}
+                    alt={`${typedProduct.name} ${i + 1}`}
                     className="h-full w-full object-cover"
                   />
                 </button>
@@ -156,20 +155,20 @@ export default function ProductDetailPage() {
         {/* Details */}
         <div>
           <span className="rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
-            {typeLabels[product.type] || product.type}
+            {typeLabels[typedProduct.type] ?? typedProduct.type}
           </span>
 
-          <h1 className="mt-4 text-3xl font-bold tracking-tight">{product.name}</h1>
+          <h1 className="mt-4 text-3xl font-bold tracking-tight">{typedProduct.name}</h1>
 
           {/* Price */}
           {primaryPrice && (
             <div className="mt-4">
               <span className="text-3xl font-bold text-foreground">
-                {formatPrice(primaryPrice.amount, primaryPrice.currency)}
+                {formatPrice(primaryPrice.amount, primaryPrice.currency ?? "USD")}
               </span>
               {primaryPrice.type === "subscription" && (
                 <span className="text-lg text-text-muted ml-1">
-                  /{primaryPrice.interval || "month"}
+                  /{primaryPrice.interval ?? "month"}
                 </span>
               )}
               {primaryPrice.trial_days > 0 && (
@@ -183,13 +182,13 @@ export default function ProductDetailPage() {
           {/* Additional prices */}
           {prices.length > 1 && (
             <div className="mt-3 flex flex-wrap gap-2">
-              {prices.slice(1).map((price) => (
+              {prices.slice(1).map((price: Price) => (
                 <span
-                  key={price.id}
+                  key={String(price.id)}
                   className="rounded-lg border border-border bg-bg-secondary px-3 py-1.5 text-sm text-text-secondary"
                 >
-                  {formatPrice(price.amount, price.currency)}
-                  {price.type === "subscription" && `/${price.interval || "mo"}`}
+                  {formatPrice(price.amount, price.currency ?? "USD")}
+                  {price.type === "subscription" && `/${price.interval ?? "mo"}`}
                 </span>
               ))}
             </div>
@@ -202,15 +201,15 @@ export default function ProductDetailPage() {
                 Options
               </label>
               <div className="flex flex-wrap gap-2">
-                {variants.map((v) => (
+                {variants.map((v: Variant) => (
                   <button
-                    key={v.id}
+                    key={String(v.id)}
                     className="rounded-lg border border-border bg-bg-secondary px-4 py-2 text-sm text-foreground hover:border-accent/40 transition-colors"
                   >
                     {v.name}
                     {v.price_override != null && (
                       <span className="ml-1 text-text-muted">
-                        ({formatPrice(v.price_override, primaryPrice?.currency || "USD")})
+                        ({formatPrice(v.price_override, primaryPrice?.currency ?? "USD")})
                       </span>
                     )}
                   </button>
@@ -236,7 +235,10 @@ export default function ProductDetailPage() {
                   <h3 className="text-xl font-bold text-foreground mb-4">Redirecting to PayPal...</h3>
                   <p className="text-text-secondary mb-4">If you are not redirected automatically, click the button below.</p>
                   {checkoutData.approval_url && (
-                    <a href={checkoutData.approval_url} className="inline-block rounded-xl bg-blue-500 px-6 py-3 font-semibold text-white hover:bg-blue-600 transition-colors">
+                    
+                      href={checkoutData.approval_url}
+                      className="inline-block rounded-xl bg-blue-500 px-6 py-3 font-semibold text-white hover:bg-blue-600 transition-colors"
+                    >
                       Continue to PayPal
                     </a>
                   )}
@@ -250,7 +252,7 @@ export default function ProductDetailPage() {
                     amount={checkoutData.amount!}
                     currency={checkoutData.currency!}
                     orderId={checkoutData.order_id}
-                    onSuccess={async (orderId) => {
+                    onSuccess={async (orderId: number) => {
                       toast.success("Payment successful!");
                       try {
                         await confirmCheckout(orderId);
@@ -259,7 +261,7 @@ export default function ProductDetailPage() {
                       }
                       router.push(`/checkout/success?order_id=${orderId}`);
                     }}
-                    onError={(msg) => {
+                    onError={(msg: string) => {
                       toast.error(msg);
                       setCheckoutData(null);
                     }}
@@ -274,19 +276,31 @@ export default function ProductDetailPage() {
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     onClick={() => setProvider("stripe")}
-                    className={`px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${provider === "stripe" ? "border-accent bg-accent/10 text-accent" : "border-border text-text-secondary hover:border-accent/40"}`}
+                    className={`px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${
+                      provider === "stripe"
+                        ? "border-accent bg-accent/10 text-accent"
+                        : "border-border text-text-secondary hover:border-accent/40"
+                    }`}
                   >
                     Card (Stripe)
                   </button>
                   <button
                     onClick={() => setProvider("mpesa")}
-                    className={`px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${provider === "mpesa" ? "border-green-500 bg-green-500/10 text-green-500" : "border-border text-text-secondary hover:border-green-500/40"}`}
+                    className={`px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${
+                      provider === "mpesa"
+                        ? "border-green-500 bg-green-500/10 text-green-500"
+                        : "border-border text-text-secondary hover:border-green-500/40"
+                    }`}
                   >
                     M-Pesa
                   </button>
                   <button
                     onClick={() => setProvider("paypal")}
-                    className={`px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${provider === "paypal" ? "border-blue-500 bg-blue-500/10 text-blue-500" : "border-border text-text-secondary hover:border-blue-500/40"}`}
+                    className={`px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${
+                      provider === "paypal"
+                        ? "border-blue-500 bg-blue-500/10 text-blue-500"
+                        : "border-border text-text-secondary hover:border-blue-500/40"
+                    }`}
                   >
                     PayPal
                   </button>
@@ -320,7 +334,7 @@ export default function ProductDetailPage() {
                   createCheckout(
                     {
                       type: "product",
-                      product_id: product.id,
+                      product_id: typedProduct.id,
                       price_id: selectedPriceId ?? primaryPrice?.id,
                       provider: provider,
                       phone: provider === "mpesa" ? phone : undefined,
@@ -332,7 +346,7 @@ export default function ProductDetailPage() {
                         } else {
                           setCheckoutData(data);
                         }
-                      }
+                      },
                     }
                   );
                 }}
@@ -341,11 +355,11 @@ export default function ProductDetailPage() {
               >
                 {checkingOut
                   ? "Preparing checkout..."
-                  : product.type === "membership"
-                    ? "Join Now"
-                    : product.type === "service"
-                      ? "Book Now"
-                      : "Buy Now"}
+                  : typedProduct.type === "membership"
+                  ? "Join Now"
+                  : typedProduct.type === "service"
+                  ? "Book Now"
+                  : "Buy Now"}
               </button>
             </div>
           )}
@@ -360,7 +374,7 @@ export default function ProductDetailPage() {
               <Zap className="h-4 w-4 text-accent" />
               Instant delivery
             </div>
-            {product.type === "digital" && (
+            {typedProduct.type === "digital" && (
               <div className="flex items-center gap-2 text-xs text-text-muted">
                 <Download className="h-4 w-4 text-accent" />
                 Downloadable files
@@ -375,27 +389,22 @@ export default function ProductDetailPage() {
           </div>
 
           {/* Description */}
-          {product.description && (
+          {typedProduct.description && (
             <div className="mt-8 pt-8 border-t border-border/50">
               <h2 className="text-lg font-semibold text-foreground mb-3">Description</h2>
               <div className="text-text-secondary leading-relaxed whitespace-pre-line">
-                {product.description}
+                {typedProduct.description}
               </div>
             </div>
           )}
 
           {/* Downloadable files */}
-          {product.downloadable_files && product.downloadable_files.length > 0 && (
+          {typedProduct.downloadable_files && typedProduct.downloadable_files.length > 0 && (
             <div className="mt-6 pt-6 border-t border-border/50">
-              <h3 className="text-sm font-semibold text-foreground mb-2">
-                Included Files
-              </h3>
+              <h3 className="text-sm font-semibold text-foreground mb-2">Included Files</h3>
               <div className="space-y-1">
-                {product.downloadable_files.map((file, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-2 text-sm text-text-secondary"
-                  >
+                {typedProduct.downloadable_files.map((file, i: number) => (
+                  <div key={i} className="flex items-center gap-2 text-sm text-text-secondary">
                     <Download className="h-3.5 w-3.5 text-accent" />
                     {file.name}
                   </div>

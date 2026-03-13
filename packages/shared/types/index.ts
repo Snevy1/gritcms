@@ -175,15 +175,43 @@ export type DownloadableFile = {
   name: string;
 };
 
-export type ProductType = "course" | "download" | "membership" | "bundle";
+export type Price = {
+  id: number | string;
+  amount: number;
+  currency: string;
+  type?: string;
+  interval?: string;
+  trial_days: number;
+};
+
+export type Variant = {
+  id: number | string;
+  name: string;
+  price_override?: number | null;
+};
 
 export type Product = {
+  id: number | string;
   name: string;
-  type: ProductType | string;  // string fallback handles any unlisted types
+  type: string;
+  description?: string;
   images?: string[];
   downloadable_files?: DownloadableFile[];
   prices?: Price[];
   variants?: Variant[];
+};
+
+export type DownloadableFileWithProduct = DownloadableFile & {
+  productName: string;
+};
+
+export type Order = {
+  id: number | string;
+  order_number: string;
+  paid_at?: string;
+  created_at: string;
+  total: number;
+  currency: string;
 };
 
 export type OrderItem = {
@@ -194,29 +222,7 @@ export type OrderItem = {
   product?: Product;
 };
 
-export type Order = {
-  order_number: string;
-  paid_at?: string;
-  created_at: string;
-  total: number;
-  currency: string;
-};
-
 export type PurchaseData = {
   order: Order;
   items: OrderItem[];
 };
-
-export type Price = {
-  id: number | string;
-  amount: number;
-  currency?: string;
-  [key: string]: unknown;
-};
-
-export type Variant = {
-  id: number | string;
-  name: string;
-  [key: string]: unknown;
-};
-
