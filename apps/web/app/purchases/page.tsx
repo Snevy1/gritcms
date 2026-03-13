@@ -6,6 +6,37 @@ import { Package, Download, ShoppingBag, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useMyPurchases } from "@/hooks/use-purchases";
 
+// Import or define the types
+type DownloadableFile = {
+  url: string;
+  name: string;
+};
+
+type Product = {
+  id: number;
+  name: string;
+  images?: string[];
+  downloadable_files?: DownloadableFile[];
+};
+
+type OrderItem = {
+  id: number;
+  product?: Product;
+};
+
+type Order = {
+  id: number;
+  order_number: string;
+  total: number;
+  currency: string;
+  paid_at?: string;
+};
+
+type Purchase = {
+  order: Order;
+  items: OrderItem[];
+};
+
 function formatCurrency(amount: number, currency = "USD") {
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount / 100);
 }
@@ -56,11 +87,11 @@ export default function PurchasesPage() {
         </div>
       ) : purchases && purchases.length > 0 ? (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {purchases.map((purchase) => {
+          {(purchases as Purchase[]).map((purchase: Purchase) => {
             const product = purchase.items?.[0]?.product;
             const image = product?.images?.[0];
             const hasFiles = purchase.items?.some(
-              (item) => item.product?.downloadable_files && item.product.downloadable_files.length > 0
+              (item: OrderItem) => item.product?.downloadable_files && item.product.downloadable_files.length > 0
             );
 
             return (
