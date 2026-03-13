@@ -138,6 +138,16 @@ func Load() (*Config, error) {
 		StripeSecretKey:      getEnv("STRIPE_SECRET_KEY", ""),
 		StripePublishableKey: getEnv("STRIPE_PUBLISHABLE_KEY", ""),
 		StripeWebhookSecret:  getEnv("STRIPE_WEBHOOK_SECRET", ""),
+		
+		MPesaEnvironment:    getEnv("MPESA_ENVIRONMENT", "sandbox"),
+		MPesaConsumerKey:    getEnv("MPESA_CONSUMER_KEY", ""),
+		MPesaConsumerSecret: getEnv("MPESA_CONSUMER_SECRET", ""),
+		MPesaShortcode:      getEnv("MPESA_SHORTCODE", ""),
+		MPesaPasskey:        getEnv("MPESA_PASSKEY", ""),
+
+		PayPalClientID:     getEnv("PAYPAL_CLIENT_ID", ""),
+		PayPalClientSecret: getEnv("PAYPAL_CLIENT_SECRET", ""),
+		PayPalEnvironment:  getEnv("PAYPAL_ENVIRONMENT", "sandbox"),
 	}
 
 	if cfg.DatabaseURL == "" {
