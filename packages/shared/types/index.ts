@@ -192,6 +192,7 @@ export type Variant = {
 
 export type Product = {
   id: number
+  slug: string;
   name: string;
   type: string;
   description?: string;
