@@ -5,7 +5,67 @@ import Link from "next/link";
 import { ArrowLeft, Download, Package, CheckCircle, Loader2, FileText } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useMyPurchase } from "@/hooks/use-purchases";
-import type { PurchaseData, OrderItem, DownloadableFile } from "@repo/shared/types";
+
+
+export type DownloadableFile = {
+  url: string;
+  name: string;
+};
+
+
+export type Variant = {
+  id: number
+  name: string;
+  price_override?: number | null;
+};
+
+
+
+export type DownloadableFileWithProduct = DownloadableFile & {
+  productName: string;
+};
+
+export type Order = {
+  id: number
+  order_number: string;
+  paid_at?: string;
+  created_at: string;
+  total: number;
+  currency: string;
+};
+export type Price = {
+  id: number
+  amount: number;
+  currency: string;
+  type?: string;
+  interval?: string;
+  trial_days: number;
+};
+
+export type Product = {
+  id: number
+  slug: string;
+  name: string;
+  type: string;
+  description?: string;
+  images?: string[];
+  downloadable_files?: DownloadableFile[];
+  prices?: Price[];
+  variants?: Variant[];
+};
+
+export type OrderItem = {
+  id: number
+  quantity: number;
+  unit_price: number;
+  total: number;
+  product?: Product;
+};
+
+export type PurchaseData = {
+  order: Order;
+  items: OrderItem[];
+};
 
 function formatCurrency(amount: number, currency = "USD") {
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount / 100);

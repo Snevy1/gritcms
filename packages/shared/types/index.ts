@@ -175,14 +175,6 @@ export type DownloadableFile = {
   name: string;
 };
 
-export type Price = {
-  id: number
-  amount: number;
-  currency: string;
-  type?: string;
-  interval?: string;
-  trial_days: number;
-};
 
 export type Variant = {
   id: number
@@ -190,40 +182,9 @@ export type Variant = {
   price_override?: number | null;
 };
 
-export type Product = {
-  id: number
-  slug: string;
-  name: string;
-  type: string;
-  description?: string;
-  images?: string[];
-  downloadable_files?: DownloadableFile[];
-  prices?: Price[];
-  variants?: Variant[];
-};
+
 
 export type DownloadableFileWithProduct = DownloadableFile & {
   productName: string;
 };
 
-export type Order = {
-  id: number
-  order_number: string;
-  paid_at?: string;
-  created_at: string;
-  total: number;
-  currency: string;
-};
-
-export type OrderItem = {
-  id: number
-  quantity: number;
-  unit_price: number;
-  total: number;
-  product?: Product;
-};
-
-export type PurchaseData = {
-  order: Order;
-  items: OrderItem[];
-};
