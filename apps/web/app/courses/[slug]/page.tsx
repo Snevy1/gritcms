@@ -27,7 +27,8 @@ import { StripeProvider } from "@/components/stripe-provider";
 import { CheckoutForm } from "@/components/checkout-form";
 import { LessonPreviewModal } from "@/components/lesson-preview-modal";
 import type { Lesson, CheckoutResponse } from "@repo/shared/types";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useCheckoutStatus } from "@/hooks/use-checkout";
 
 const lessonIcons: Record<string, typeof Play> = {
   video: Play,
@@ -57,6 +58,17 @@ export default function CourseDetailPage() {
   const [expandedModules, setExpandedModules] = useState<Set<number>>(new Set());
   const [previewLesson, setPreviewLesson] = useState<Lesson | null>(null);
   const [checkoutData, setCheckoutData] = useState<CheckoutResponse | null>(null);
+  const [provider, setProvider] = useState<"stripe" | "paypal" | "mpesa">("stripe");
+  const [phone, setPhone] = useState("");
+
+  const { data: statusData } = useCheckoutStatus(checkoutData?.order_id ?? null);
+
+  useEffect(() => {
+    if (statusData?.status === "paid" && checkoutData?.order_id) {
+      toast.success("Payment successful! Enrolling...");
+      router.push(`/learn/${course?.slug}`);
+    }
+  }, [statusData?.status, router, checkoutData?.order_id, course?.slug]);
 
   const isEnrolled = !!studentCourse?.enrollment;
 
@@ -83,14 +95,26 @@ export default function CourseDetailPage() {
     }
 
     if (course.access_type === "paid") {
+      if (provider === "mpesa" && !phone) {
+        toast.error("Please enter your M-Pesa phone number");
+        return;
+      }
       createCheckout(
         {
           type: "course",
           course_id: course.id,
           price_id: 0,
+          provider: provider,
+          phone: provider === "mpesa" ? phone : undefined,
         },
         {
-          onSuccess: (data) => setCheckoutData(data),
+          onSuccess: (data) => {
+            if (data.provider === "paypal" && data.approval_url) {
+              window.location.href = data.approval_url;
+            } else {
+              setCheckoutData(data);
+            }
+          }
         }
       );
     } else {
@@ -257,31 +281,54 @@ export default function CourseDetailPage() {
           </div>
 
           {/* Enroll / Continue CTA */}
-          <div className="rounded-xl border border-border bg-bg-elevated p-5 space-y-3">
+          <div className="rounded-xl border border-border bg-bg-elevated p-5 space-y-4">
             {checkoutData ? (
-              <StripeProvider
-                clientSecret={checkoutData.client_secret}
-                publishableKey={checkoutData.publishable_key}
-              >
-                <CheckoutForm
-                  amount={checkoutData.amount}
-                  currency={checkoutData.currency}
-                  orderId={checkoutData.order_id}
-                  onSuccess={async (orderId) => {
-                    toast.success("Payment successful! Enrolling...");
-                    try {
-                      await confirmCheckout(orderId);
-                    } catch {
-                      // Webhook will handle it as fallback
-                    }
-                    router.push(`/learn/${course.slug}`);
-                  }}
-                  onError={(msg) => {
-                    toast.error(msg);
-                    setCheckoutData(null);
-                  }}
-                />
-              </StripeProvider>
+              <div>
+                {checkoutData.provider === "mpesa" ? (
+                  <div className="text-center py-4">
+                    <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-500/10">
+                      <CheckCircle className="h-6 w-6 text-green-500" />
+                    </div>
+                    <h3 className="text-lg font-bold text-foreground">Pending Payment</h3>
+                    <p className="mt-1 text-sm text-text-secondary">{checkoutData.message}</p>
+                    <p className="mt-3 text-xs text-text-muted animate-pulse">Waiting for M-Pesa confirmation...</p>
+                  </div>
+                ) : checkoutData.provider === "paypal" ? (
+                  <div className="text-center py-4">
+                    <h3 className="text-lg font-bold text-foreground mb-3">Redirecting to PayPal...</h3>
+                    <p className="text-sm text-text-secondary mb-3">If you are not redirected automatically, click the button below.</p>
+                    {checkoutData.approval_url && (
+                      <a href={checkoutData.approval_url} className="inline-block rounded-lg bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-600 transition-colors">
+                        Continue to PayPal
+                      </a>
+                    )}
+                  </div>
+                ) : (
+                  <StripeProvider
+                    clientSecret={checkoutData.client_secret!}
+                    publishableKey={checkoutData.publishable_key!}
+                  >
+                    <CheckoutForm
+                      amount={checkoutData.amount!}
+                      currency={checkoutData.currency!}
+                      orderId={checkoutData.order_id}
+                      onSuccess={async (orderId) => {
+                        toast.success("Payment successful! Enrolling...");
+                        try {
+                          await confirmCheckout(orderId);
+                        } catch {
+                          // Webhook will handle it as fallback
+                        }
+                        router.push(`/learn/${course.slug}`);
+                      }}
+                      onError={(msg) => {
+                        toast.error(msg);
+                        setCheckoutData(null);
+                      }}
+                    />
+                  </StripeProvider>
+                )}
+              </div>
             ) : isEnrolled ? (
               <Link
                 href={`/learn/${course.slug}`}
@@ -290,19 +337,62 @@ export default function CourseDetailPage() {
                 Continue Learning
               </Link>
             ) : (
-              <button
-                onClick={handleEnroll}
-                disabled={enrolling || checkingOut}
-                className="w-full rounded-lg bg-accent px-4 py-3 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50 transition-colors"
-              >
-                {checkingOut
-                  ? "Preparing checkout..."
-                  : enrolling
-                    ? "Enrolling..."
-                    : course.access_type === "free"
-                      ? "Enroll for Free"
-                      : "Enroll Now"}
-              </button>
+              <div>
+                {course.access_type === "paid" && (
+                  <div className="mb-4 space-y-3">
+                    <div>
+                      <label className="text-xs font-medium text-foreground mb-1.5 block">Payment Method</label>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <button
+                          onClick={() => setProvider("stripe")}
+                          className={`px-2 py-2 rounded-lg border text-xs font-medium transition-colors ${provider === "stripe" ? "border-accent bg-accent/10 text-accent" : "border-border text-text-secondary hover:border-accent/40"}`}
+                        >
+                          Card
+                        </button>
+                        <button
+                          onClick={() => setProvider("mpesa")}
+                          className={`px-2 py-2 rounded-lg border text-xs font-medium transition-colors ${provider === "mpesa" ? "border-green-500 bg-green-500/10 text-green-500" : "border-border text-text-secondary hover:border-green-500/40"}`}
+                        >
+                          M-Pesa
+                        </button>
+                        <button
+                          onClick={() => setProvider("paypal")}
+                          className={`px-2 py-2 rounded-lg border text-xs font-medium transition-colors ${provider === "paypal" ? "border-blue-500 bg-blue-500/10 text-blue-500" : "border-border text-text-secondary hover:border-blue-500/40"}`}
+                        >
+                          PayPal
+                        </button>
+                      </div>
+                    </div>
+
+                    {provider === "mpesa" && (
+                      <div>
+                        <label className="text-xs font-medium text-foreground mb-1 block">Phone Number</label>
+                        <input
+                          type="tel"
+                          placeholder="e.g. 254712345678"
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          className="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleEnroll}
+                  disabled={enrolling || checkingOut}
+                  className="w-full rounded-lg bg-accent px-4 py-3 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50 transition-colors"
+                >
+                  {checkingOut
+                    ? "Preparing checkout..."
+                    : enrolling
+                      ? "Enrolling..."
+                      : course.access_type === "free"
+                        ? "Enroll for Free"
+                        : "Enroll Now"}
+                </button>
+              </div>
             )}
             {!isAuthenticated && !checkoutData && (
               <p className="text-xs text-text-muted text-center">
@@ -391,11 +481,10 @@ export default function CourseDetailPage() {
                             <div
                               key={lesson.id}
                               onClick={() => isFreePreview ? setPreviewLesson(lesson) : undefined}
-                              className={`flex items-center gap-3 px-5 py-3 pl-12 transition-colors ${
-                                isFreePreview
+                              className={`flex items-center gap-3 px-5 py-3 pl-12 transition-colors ${isFreePreview
                                   ? "cursor-pointer hover:bg-accent/5"
                                   : "hover:bg-bg-hover/50"
-                              }`}
+                                }`}
                             >
                               <LessonIcon className={`h-4 w-4 shrink-0 ${isFreePreview ? "text-accent" : "text-text-muted"}`} />
                               <span className="flex-1 text-sm text-foreground truncate">

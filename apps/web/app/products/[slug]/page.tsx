@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ArrowLeft,
   ShoppingBag,
@@ -16,7 +16,7 @@ import {
 import { toast } from "sonner";
 import { usePublicProduct } from "@/hooks/use-commerce";
 import { useAuth } from "@/hooks/use-auth";
-import { useCreateCheckout, useConfirmCheckout } from "@/hooks/use-checkout";
+import { useCreateCheckout, useConfirmCheckout, useCheckoutStatus } from "@/hooks/use-checkout";
 import { StripeProvider } from "@/components/stripe-provider";
 import { CheckoutForm } from "@/components/checkout-form";
 import type { CheckoutResponse } from "@repo/shared/types";
@@ -47,6 +47,17 @@ export default function ProductDetailPage() {
   const [selectedImage, setSelectedImage] = useState(0);
   const [checkoutData, setCheckoutData] = useState<CheckoutResponse | null>(null);
   const [selectedPriceId, setSelectedPriceId] = useState<number | null>(null);
+  const [provider, setProvider] = useState<"stripe" | "paypal" | "mpesa">("stripe");
+  const [phone, setPhone] = useState("");
+
+  const { data: statusData } = useCheckoutStatus(checkoutData?.order_id ?? null);
+
+  useEffect(() => {
+    if (statusData?.status === "paid" && checkoutData?.order_id) {
+      toast.success("Payment successful!");
+      router.push(`/checkout/success?order_id=${checkoutData.order_id}`);
+    }
+  }, [statusData?.status, router, checkoutData?.order_id]);
 
   if (isLoading) {
     return (
@@ -126,11 +137,10 @@ export default function ProductDetailPage() {
                 <button
                   key={i}
                   onClick={() => setSelectedImage(i)}
-                  className={`h-16 w-16 shrink-0 rounded-lg border overflow-hidden transition-colors ${
-                    selectedImage === i
+                  className={`h-16 w-16 shrink-0 rounded-lg border overflow-hidden transition-colors ${selectedImage === i
                       ? "border-accent"
                       : "border-border hover:border-accent/40"
-                  }`}
+                    }`}
                 >
                   <img
                     src={img}
@@ -212,59 +222,132 @@ export default function ProductDetailPage() {
           {/* CTA */}
           {checkoutData ? (
             <div className="mt-8">
-              <StripeProvider
-                clientSecret={checkoutData.client_secret}
-                publishableKey={checkoutData.publishable_key}
-              >
-                <CheckoutForm
-                  amount={checkoutData.amount}
-                  currency={checkoutData.currency}
-                  orderId={checkoutData.order_id}
-                  onSuccess={async (orderId) => {
-                    toast.success("Payment successful!");
-                    try {
-                      await confirmCheckout(orderId);
-                    } catch {
-                      // Webhook will handle it as fallback
-                    }
-                    router.push(`/checkout/success?order_id=${orderId}`);
-                  }}
-                  onError={(msg) => {
-                    toast.error(msg);
-                    setCheckoutData(null);
-                  }}
-                />
-              </StripeProvider>
+              {checkoutData.provider === "mpesa" ? (
+                <div className="rounded-xl border border-border bg-bg-elevated p-6 text-center">
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10">
+                    <Check className="h-8 w-8 text-green-500" />
+                  </div>
+                  <h3 className="text-xl font-bold text-foreground">Pending Payment</h3>
+                  <p className="mt-2 text-text-secondary">{checkoutData.message}</p>
+                  <p className="mt-4 text-sm text-text-muted animate-pulse">Waiting for M-Pesa confirmation...</p>
+                </div>
+              ) : checkoutData.provider === "paypal" ? (
+                <div className="rounded-xl border border-border bg-bg-elevated p-6 text-center">
+                  <h3 className="text-xl font-bold text-foreground mb-4">Redirecting to PayPal...</h3>
+                  <p className="text-text-secondary mb-4">If you are not redirected automatically, click the button below.</p>
+                  {checkoutData.approval_url && (
+                    <a href={checkoutData.approval_url} className="inline-block rounded-xl bg-blue-500 px-6 py-3 font-semibold text-white hover:bg-blue-600 transition-colors">
+                      Continue to PayPal
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <StripeProvider
+                  clientSecret={checkoutData.client_secret!}
+                  publishableKey={checkoutData.publishable_key!}
+                >
+                  <CheckoutForm
+                    amount={checkoutData.amount!}
+                    currency={checkoutData.currency!}
+                    orderId={checkoutData.order_id}
+                    onSuccess={async (orderId) => {
+                      toast.success("Payment successful!");
+                      try {
+                        await confirmCheckout(orderId);
+                      } catch {
+                        // Webhook will handle it as fallback
+                      }
+                      router.push(`/checkout/success?order_id=${orderId}`);
+                    }}
+                    onError={(msg) => {
+                      toast.error(msg);
+                      setCheckoutData(null);
+                    }}
+                  />
+                </StripeProvider>
+              )}
             </div>
           ) : (
-            <button
-              onClick={() => {
-                if (!isAuthenticated) {
-                  window.location.href = `/auth/login?redirect=/products/${slug}`;
-                  return;
-                }
-                createCheckout(
-                  {
-                    type: "product",
-                    product_id: product.id,
-                    price_id: selectedPriceId ?? primaryPrice?.id,
-                  },
-                  {
-                    onSuccess: (data) => setCheckoutData(data),
+            <div className="mt-8 space-y-4">
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">Payment Method</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    onClick={() => setProvider("stripe")}
+                    className={`px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${provider === "stripe" ? "border-accent bg-accent/10 text-accent" : "border-border text-text-secondary hover:border-accent/40"}`}
+                  >
+                    Card (Stripe)
+                  </button>
+                  <button
+                    onClick={() => setProvider("mpesa")}
+                    className={`px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${provider === "mpesa" ? "border-green-500 bg-green-500/10 text-green-500" : "border-border text-text-secondary hover:border-green-500/40"}`}
+                  >
+                    M-Pesa
+                  </button>
+                  <button
+                    onClick={() => setProvider("paypal")}
+                    className={`px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${provider === "paypal" ? "border-blue-500 bg-blue-500/10 text-blue-500" : "border-border text-text-secondary hover:border-blue-500/40"}`}
+                  >
+                    PayPal
+                  </button>
+                </div>
+              </div>
+
+              {provider === "mpesa" && (
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-1 block">Phone Number</label>
+                  <input
+                    type="tel"
+                    placeholder="e.g. 254712345678"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="w-full rounded-xl border border-border bg-bg-secondary px-4 py-3 text-sm text-foreground focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                  <p className="mt-1 text-xs text-text-muted">Enter your M-Pesa registered phone number.</p>
+                </div>
+              )}
+
+              <button
+                onClick={() => {
+                  if (!isAuthenticated) {
+                    window.location.href = `/auth/login?redirect=/products/${slug}`;
+                    return;
                   }
-                );
-              }}
-              disabled={checkingOut}
-              className="mt-8 w-full rounded-xl bg-accent px-6 py-3.5 text-base font-semibold text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
-            >
-              {checkingOut
-                ? "Preparing checkout..."
-                : product.type === "membership"
-                  ? "Join Now"
-                  : product.type === "service"
-                    ? "Book Now"
-                    : "Buy Now"}
-            </button>
+                  if (provider === "mpesa" && !phone) {
+                    toast.error("Please enter your M-Pesa phone number");
+                    return;
+                  }
+                  createCheckout(
+                    {
+                      type: "product",
+                      product_id: product.id,
+                      price_id: selectedPriceId ?? primaryPrice?.id,
+                      provider: provider,
+                      phone: provider === "mpesa" ? phone : undefined,
+                    },
+                    {
+                      onSuccess: (data) => {
+                        if (data.provider === "paypal" && data.approval_url) {
+                          window.location.href = data.approval_url;
+                        } else {
+                          setCheckoutData(data);
+                        }
+                      }
+                    }
+                  );
+                }}
+                disabled={checkingOut}
+                className="w-full rounded-xl bg-accent px-6 py-3.5 text-base font-semibold text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
+              >
+                {checkingOut
+                  ? "Preparing checkout..."
+                  : product.type === "membership"
+                    ? "Join Now"
+                    : product.type === "service"
+                      ? "Book Now"
+                      : "Buy Now"}
+              </button>
+            </div>
           )}
 
           {/* Trust signals */}

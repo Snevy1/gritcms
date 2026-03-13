@@ -90,8 +90,7 @@ export interface OrderItem {
   id: number;
   tenant_id: number;
   order_id: number;
-  product_id?: number | null;
-  course_id?: number | null;
+  product_id: number;
   price_id: number | null;
   variant_id: number | null;
   quantity: number;
@@ -99,7 +98,6 @@ export interface OrderItem {
   total: number;
   created_at: string;
   product?: Product;
-  course?: import("./course").Course;
 }
 
 // --- Coupons ---
@@ -159,12 +157,23 @@ export interface CheckoutRequest {
 }
 
 export interface CheckoutResponse {
-  client_secret: string;
+  provider?: "stripe" | "paypal" | "mpesa";
   order_id: number;
-  order_number: string;
-  amount: number;
-  currency: string;
-  publishable_key: string;
+  order_number?: string;
+  amount?: number;
+  currency?: string;
+
+  // Stripe
+  client_secret?: string;
+  publishable_key?: string;
+
+  // PayPal
+  paypal_order_id?: string;
+  approval_url?: string;
+
+  // MPesa
+  checkout_request_id?: string;
+  message?: string;
 }
 
 export interface CheckoutStatus {
@@ -172,14 +181,6 @@ export interface CheckoutStatus {
   order_number: string;
   status: string;
   total: number;
-  items?: OrderItem[];
-}
-
-// --- Purchases (student/my-purchases) ---
-
-export interface PurchaseData {
-  order: Order;
-  items: OrderItem[];
 }
 
 // --- Revenue Dashboard ---
@@ -192,12 +193,4 @@ export interface RevenueDashboard {
   monthly_revenue: number;
   mrr: number;
   recent_orders: Order[];
-}
-
-export interface CourseDashboard {
-  total_courses: number;
-  published_courses: number;
-  total_enrollments: number;
-  course_revenue: number;
-  monthly_revenue: number;
 }

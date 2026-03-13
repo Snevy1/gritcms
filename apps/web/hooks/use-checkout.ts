@@ -11,6 +11,8 @@ interface CheckoutInput {
   course_id?: number;
   price_id?: number;
   coupon_code?: string;
+  provider?: "stripe" | "paypal" | "mpesa";
+  phone?: string;
 }
 
 export function useCreateCheckout() {

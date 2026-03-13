@@ -17,6 +17,7 @@ import (
 	"gritcms/apps/api/internal/config"
 	"gritcms/apps/api/internal/events"
 	"gritcms/apps/api/internal/models"
+	"gritcms/apps/api/internal/services"
 )
 
 // PaymentHandler handles Stripe checkout and webhook endpoints.
@@ -43,6 +44,8 @@ func (h *PaymentHandler) Checkout(c *gin.Context) {
 		CourseID   *uint  `json:"course_id"`
 		PriceID    uint   `json:"price_id"`
 		CouponCode string `json:"coupon_code"`
+		Provider   string `json:"provider"` // "stripe", "paypal", "mpesa"
+		Phone      string `json:"phone"`    // Required for mpesa
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -69,11 +72,10 @@ func (h *PaymentHandler) Checkout(c *gin.Context) {
 		h.db.Save(&contact)
 	}
 
-	// Resolve product/course and build order item
-	var subtotal float64
+	// Resolve product and price
+	var product models.Product
+	var price models.Price
 	var currency string
-	var itemName string
-	var orderItem models.OrderItem
 
 	switch input.Type {
 	case "course":
@@ -94,60 +96,54 @@ func (h *PaymentHandler) Checkout(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "This course is free — no payment needed"})
 			return
 		}
-		subtotal = course.Price
-		currency = course.Currency
-		itemName = course.Title
-		orderItem = models.OrderItem{
-			TenantID:  1,
-			CourseID:  &course.ID,
-			Quantity:  1,
-			UnitPrice: course.Price,
-			Total:     course.Price,
+		if course.ProductID != nil {
+			if err := h.db.First(&product, *course.ProductID).Error; err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Linked product not found"})
+				return
+			}
+		} else {
+			// Auto-create a product + price for the paid course
+			cur := course.Currency
+			if cur == "" {
+				cur = "USD"
+			}
+			product = models.Product{
+				TenantID:    1,
+				Name:        course.Title,
+				Slug:        course.Slug + "-product",
+				Type:        models.ProductTypeCourse,
+				Status:      "active",
+				Description: course.ShortDescription,
+			}
+			if err := h.db.Create(&product).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create product for course"})
+				return
+			}
+			price = models.Price{
+				TenantID:  1,
+				ProductID: product.ID,
+				Amount:    course.Price,
+				Currency:  cur,
+				Type:      models.PriceTypeOneTime,
+				SortOrder: 0,
+			}
+			if err := h.db.Create(&price).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create price for course"})
+				return
+			}
+			// Link product back to course
+			h.db.Model(&course).Update("product_id", product.ID)
 		}
+		currency = course.Currency
 
 	case "product":
 		if input.ProductID == nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "product_id is required"})
 			return
 		}
-		var product models.Product
 		if err := h.db.First(&product, *input.ProductID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Product not found"})
 			return
-		}
-		if product.Status != "active" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Product is not available"})
-			return
-		}
-
-		// Load price — auto-resolve default price if not specified
-		var price models.Price
-		if input.PriceID > 0 {
-			if err := h.db.First(&price, input.PriceID).Error; err != nil {
-				c.JSON(http.StatusNotFound, gin.H{"error": "Price not found"})
-				return
-			}
-			if price.ProductID != product.ID {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Price does not belong to this product"})
-				return
-			}
-		} else {
-			if err := h.db.Where("product_id = ? AND type = ?", product.ID, models.PriceTypeOneTime).
-				Order("sort_order ASC").First(&price).Error; err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "No price found for this product"})
-				return
-			}
-		}
-		subtotal = price.Amount
-		currency = price.Currency
-		itemName = product.Name
-		orderItem = models.OrderItem{
-			TenantID:  1,
-			ProductID: &product.ID,
-			PriceID:   &price.ID,
-			Quantity:  1,
-			UnitPrice: price.Amount,
-			Total:     price.Amount,
 		}
 
 	default:
@@ -155,11 +151,39 @@ func (h *PaymentHandler) Checkout(c *gin.Context) {
 		return
 	}
 
+	if product.Status != "active" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Product is not available"})
+		return
+	}
+
+	// Load price — auto-resolve default price if not specified
+	if input.PriceID > 0 {
+		if err := h.db.First(&price, input.PriceID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Price not found"})
+			return
+		}
+		if price.ProductID != product.ID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Price does not belong to this product"})
+			return
+		}
+	} else {
+		// Auto-select the first one_time price for the product
+		if err := h.db.Where("product_id = ? AND type = ?", product.ID, models.PriceTypeOneTime).
+			Order("sort_order ASC").First(&price).Error; err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No price found for this product"})
+			return
+		}
+	}
+
+	if currency == "" {
+		currency = price.Currency
+	}
 	if currency == "" {
 		currency = "USD"
 	}
 
-	// Apply coupon discount
+	// Calculate amount
+	subtotal := price.Amount
 	var discountAmount float64
 	var couponID *uint
 
@@ -196,7 +220,13 @@ func (h *PaymentHandler) Checkout(c *gin.Context) {
 		return
 	}
 
+	// price.Amount is already stored in cents (e.g. 3000 = $30.00)
 	amountInCents := int64(math.Round(totalAmount))
+
+	provider := input.Provider
+	if provider == "" {
+		provider = "stripe"
+	}
 
 	// Create pending order
 	order := models.Order{
@@ -209,9 +239,18 @@ func (h *PaymentHandler) Checkout(c *gin.Context) {
 		TaxAmount:       0,
 		Total:           totalAmount,
 		Currency:        currency,
-		PaymentProvider: "stripe",
+		PaymentProvider: provider,
 		CouponID:        couponID,
-		Items:           []models.OrderItem{orderItem},
+		Items: []models.OrderItem{
+			{
+				TenantID:  1,
+				ProductID: product.ID,
+				PriceID:   &price.ID,
+				Quantity:  1,
+				UnitPrice: price.Amount,
+				Total:     price.Amount,
+			},
+		},
 	}
 
 	if err := h.db.Create(&order).Error; err != nil {
@@ -224,43 +263,112 @@ func (h *PaymentHandler) Checkout(c *gin.Context) {
 		h.db.Model(&models.Coupon{}).Where("id = ?", *couponID).UpdateColumn("used_count", gorm.Expr("used_count + 1"))
 	}
 
-	// Create Stripe PaymentIntent
-	params := &stripe.PaymentIntentParams{
-		Amount:   stripe.Int64(amountInCents),
-		Currency: stripe.String(strings.ToLower(currency)),
-		AutomaticPaymentMethods: &stripe.PaymentIntentAutomaticPaymentMethodsParams{
-			Enabled: stripe.Bool(true),
-		},
-		Description:  stripe.String(itemName),
-		ReceiptEmail: stripe.String(u.Email),
-		Metadata: map[string]string{
-			"order_id":   fmt.Sprintf("%d", order.ID),
-			"contact_id": fmt.Sprintf("%d", contact.ID),
-			"type":       input.Type,
-		},
-	}
+	// Initialize payment based on provider
+	switch provider {
+	case "stripe":
+		// Create Stripe PaymentIntent
+		params := &stripe.PaymentIntentParams{
+			Amount:   stripe.Int64(amountInCents),
+			Currency: stripe.String(strings.ToLower(currency)),
+			AutomaticPaymentMethods: &stripe.PaymentIntentAutomaticPaymentMethodsParams{
+				Enabled: stripe.Bool(true),
+			},
+			Description: stripe.String(product.Name),
+			ReceiptEmail: stripe.String(u.Email),
+			Metadata: map[string]string{
+				"order_id":   fmt.Sprintf("%d", order.ID),
+				"contact_id": fmt.Sprintf("%d", contact.ID),
+				"type":       input.Type,
+			},
+		}
 
-	pi, err := paymentintent.New(params)
-	if err != nil {
-		log.Printf("[payment] Stripe PaymentIntent creation failed: %v", err)
-		// Clean up the order
+		pi, err := paymentintent.New(params)
+		if err != nil {
+			log.Printf("[payment] Stripe PaymentIntent creation failed: %v", err)
+			h.db.Delete(&order)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize payment"})
+			return
+		}
+
+		// Store PaymentIntent ID on order
+		order.PaymentID = pi.ID
+		h.db.Model(&order).Update("payment_id", pi.ID)
+
+		c.JSON(http.StatusOK, gin.H{"data": gin.H{
+			"provider": "stripe",
+			"client_secret":  pi.ClientSecret,
+			"order_id":       order.ID,
+			"order_number":   order.OrderNumber,
+			"amount":         amountInCents,
+			"currency":       currency,
+			"publishable_key": h.cfg.StripePublishableKey,
+		}})
+		return
+
+	case "paypal":
+		paypalSvc := services.NewPayPalService(h.cfg)
+		paypalOrder, err := paypalSvc.CreateOrder(product.Name, totalAmount, currency, fmt.Sprintf("%d", order.ID))
+		if err != nil {
+			log.Printf("[payment] PayPal Order creation failed: %v", err)
+			h.db.Delete(&order)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize PayPal payment"})
+			return
+		}
+
+		order.PaymentID = paypalOrder.ID
+		h.db.Model(&order).Update("payment_id", paypalOrder.ID)
+
+		var approvalURL string
+		for _, link := range paypalOrder.Links {
+			if link.Rel == "approve" {
+				approvalURL = link.Href
+				break
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"data": gin.H{
+			"provider": "paypal",
+			"order_id": order.ID,
+			"paypal_order_id": paypalOrder.ID,
+			"approval_url": approvalURL,
+		}})
+		return
+
+	case "mpesa":
+		if input.Phone == "" {
+			h.db.Delete(&order)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Phone number is required for M-Pesa"})
+			return
+		}
+
+		mpesaSvc := services.NewMPesaService(h.cfg)
+		// For STK Push, CallbackURL must be a public URL
+		callbackURL := strings.TrimRight(h.cfg.AppURL, "/") + "/api/callbacks/mpesa"
+		
+		checkoutRequestID, err := mpesaSvc.STKPush(input.Phone, totalAmount, order.OrderNumber, product.Name, callbackURL)
+		if err != nil {
+			log.Printf("[payment] M-Pesa STK Push failed: %v", err)
+			h.db.Delete(&order)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize M-Pesa payment: " + err.Error()})
+			return
+		}
+
+		order.PaymentID = checkoutRequestID
+		h.db.Model(&order).Update("payment_id", checkoutRequestID)
+
+		c.JSON(http.StatusOK, gin.H{"data": gin.H{
+			"provider": "mpesa",
+			"order_id": order.ID,
+			"checkout_request_id": checkoutRequestID,
+			"message": "STK Push sent to your phone. Please enter your PIN to complete the payment.",
+		}})
+		return
+
+	default:
 		h.db.Delete(&order)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize payment"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported payment provider"})
 		return
 	}
-
-	// Store PaymentIntent ID on order
-	order.PaymentID = pi.ID
-	h.db.Model(&order).Update("payment_id", pi.ID)
-
-	c.JSON(http.StatusOK, gin.H{"data": gin.H{
-		"client_secret":  pi.ClientSecret,
-		"order_id":       order.ID,
-		"order_number":   order.OrderNumber,
-		"amount":         amountInCents,
-		"currency":       currency,
-		"publishable_key": h.cfg.StripePublishableKey,
-	}})
 }
 
 // CheckoutStatus returns the current status of an order for the authenticated user.
@@ -276,24 +384,17 @@ func (h *PaymentHandler) CheckoutStatus(c *gin.Context) {
 	}
 
 	var order models.Order
-	if err := h.db.Where("id = ? AND contact_id = ?", orderID, contact.ID).
-		Preload("Items.Product").
-		First(&order).Error; err != nil {
+	if err := h.db.Where("id = ? AND contact_id = ?", orderID, contact.ID).First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
 		return
 	}
 
-	response := gin.H{
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{
 		"order_id":     order.ID,
 		"order_number": order.OrderNumber,
 		"status":       order.Status,
 		"total":        order.Total,
-	}
-	if order.Status == models.OrderStatusPaid {
-		response["items"] = order.Items
-	}
-
-	c.JSON(http.StatusOK, gin.H{"data": response})
+	}})
 }
 
 // ConfirmCheckout is called by the frontend after stripe.confirmPayment succeeds.
@@ -322,22 +423,37 @@ func (h *PaymentHandler) ConfirmCheckout(c *gin.Context) {
 		return
 	}
 
-	// Verify PaymentIntent status via Stripe
+	// Verify PaymentIntent status via provider
 	if order.PaymentID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "No payment associated with this order"})
 		return
 	}
 
-	pi, err := paymentintent.Get(order.PaymentID, nil)
-	if err != nil {
-		log.Printf("[confirm] Failed to retrieve PI %s: %v", order.PaymentID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify payment"})
-		return
-	}
+	if order.PaymentProvider == "stripe" || order.PaymentProvider == "" {
+		pi, err := paymentintent.Get(order.PaymentID, nil)
+		if err != nil {
+			log.Printf("[confirm] Failed to retrieve PI %s: %v", order.PaymentID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify payment"})
+			return
+		}
 
-	if pi.Status != stripe.PaymentIntentStatusSucceeded {
-		c.JSON(http.StatusOK, gin.H{"data": gin.H{"status": string(pi.Status)}})
-		return
+		if pi.Status != stripe.PaymentIntentStatusSucceeded {
+			c.JSON(http.StatusOK, gin.H{"data": gin.H{"status": string(pi.Status)}})
+			return
+		}
+	} else if order.PaymentProvider == "paypal" {
+		paypalSvc := services.NewPayPalService(h.cfg)
+		err := paypalSvc.CaptureOrder(order.PaymentID)
+		if err != nil {
+			log.Printf("[confirm] Failed to capture PayPal order %s: %v", order.PaymentID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to capture PayPal payment"})
+			return
+		}
+	} else if order.PaymentProvider == "mpesa" {
+		if order.Status != models.OrderStatusPaid {
+			c.JSON(http.StatusOK, gin.H{"data": gin.H{"status": "pending", "message": "Waiting for M-Pesa confirmation via callback"}})
+			return
+		}
 	}
 
 	// Mark as paid and fulfill
@@ -387,6 +503,88 @@ func (h *PaymentHandler) StripeWebhook(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"received": true})
+}
+
+// PayPalWebhook handles incoming PayPal webhook events.
+func (h *PaymentHandler) PayPalWebhook(c *gin.Context) {
+	// A robust implementation would verify the webhook signature here
+	// For now, we will just parse it
+	var event struct {
+		EventType string `json:"event_type"`
+		Resource  struct {
+			ID string `json:"id"`
+		} `json:"resource"`
+	}
+
+	if err := c.ShouldBindJSON(&event); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload"})
+		return
+	}
+
+	if event.EventType == "CHECKOUT.ORDER.APPROVED" {
+		// Log or trigger capture. We auto-capture in ConfirmCheckout normally,
+		// but we could also capture here.
+		log.Printf("[paypal] Order approved webhook received for order %s", event.Resource.ID)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"received": true})
+}
+
+// MPesaCallback handles Safaricom Lipa Na M-Pesa Online callbacks.
+func (h *PaymentHandler) MPesaCallback(c *gin.Context) {
+	var payload struct {
+		Body struct {
+			StkCallback struct {
+				MerchantRequestID string `json:"MerchantRequestID"`
+				CheckoutRequestID string `json:"CheckoutRequestID"`
+				ResultCode        int    `json:"ResultCode"`
+				ResultDesc        string `json:"ResultDesc"`
+				CallbackMetadata  struct {
+					Item []struct {
+						Name  string      `json:"Name"`
+						Value interface{} `json:"Value"`
+					} `json:"Item"`
+				} `json:"CallbackMetadata"`
+			} `json:"stkCallback"`
+		} `json:"Body"`
+	}
+
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload"})
+		return
+	}
+
+	cb := payload.Body.StkCallback
+
+	var order models.Order
+	if err := h.db.Where("payment_id = ?", cb.CheckoutRequestID).Preload("Items").First(&order).Error; err != nil {
+		log.Printf("[mpesa] Order not found for CheckoutRequestID: %s", cb.CheckoutRequestID)
+		c.JSON(http.StatusOK, gin.H{"status": "ignored"})
+		return
+	}
+
+	if order.Status == models.OrderStatusPaid {
+		c.JSON(http.StatusOK, gin.H{"status": "already_paid"})
+		return
+	}
+
+	if cb.ResultCode == 0 {
+		// Payment success
+		now := time.Now()
+		order.Status = models.OrderStatusPaid
+		order.PaidAt = &now
+		h.db.Save(&order)
+
+		fulfillOrder(h.db, &order)
+		log.Printf("[mpesa] Order %d marked as paid (M-Pesa: %s)", order.ID, cb.CheckoutRequestID)
+	} else {
+		// Payment failed/cancelled
+		order.Status = models.OrderStatusFailed
+		h.db.Save(&order)
+		log.Printf("[mpesa] Order %d payment failed: %s", order.ID, cb.ResultDesc)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "received"})
 }
 
 func (h *PaymentHandler) handlePaymentSucceeded(event stripe.Event) {
@@ -441,46 +639,29 @@ func (h *PaymentHandler) handlePaymentFailed(event stripe.Event) {
 	log.Printf("[webhook] Order %d payment failed (PI: %s)", order.ID, pi)
 }
 
-// fulfillOrder handles post-payment fulfillment: auto-enrolls in courses, etc.
+// fulfillOrder is a local wrapper to avoid circular imports.
+// It duplicates the logic from services.FulfillOrder.
 func fulfillOrder(db *gorm.DB, order *models.Order) {
 	for _, item := range order.Items {
-		// Direct course purchase — enroll via CourseID
-		if item.CourseID != nil {
-			enrollment := models.CourseEnrollment{
-				TenantID:  1,
-				ContactID: order.ContactID,
-				CourseID:  *item.CourseID,
-				Status:    "active",
-				Source:    "purchase",
-			}
-			db.FirstOrCreate(&enrollment, models.CourseEnrollment{
-				ContactID: order.ContactID,
-				CourseID:  *item.CourseID,
-			})
+		var product models.Product
+		if err := db.First(&product, item.ProductID).Error; err != nil {
 			continue
 		}
-		// Product purchase — check if product type is "course" (legacy/manual linkage)
-		if item.ProductID != nil {
-			var product models.Product
-			if err := db.First(&product, *item.ProductID).Error; err != nil {
-				continue
-			}
-			if product.Type == models.ProductTypeCourse {
-				var courses []models.Course
-				db.Where("product_id = ?", product.ID).Find(&courses)
-				for _, course := range courses {
-					enrollment := models.CourseEnrollment{
-						TenantID:  1,
-						ContactID: order.ContactID,
-						CourseID:  course.ID,
-						Status:    "active",
-						Source:    "purchase",
-					}
-					db.FirstOrCreate(&enrollment, models.CourseEnrollment{
-						ContactID: order.ContactID,
-						CourseID:  course.ID,
-					})
+		if product.Type == models.ProductTypeCourse {
+			var courses []models.Course
+			db.Where("product_id = ?", product.ID).Find(&courses)
+			for _, course := range courses {
+				enrollment := models.CourseEnrollment{
+					TenantID:  1,
+					ContactID: order.ContactID,
+					CourseID:  course.ID,
+					Status:    "active",
+					Source:    "purchase",
 				}
+				db.FirstOrCreate(&enrollment, models.CourseEnrollment{
+					ContactID: order.ContactID,
+					CourseID:  course.ID,
+				})
 			}
 		}
 	}

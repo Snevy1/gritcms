@@ -281,6 +281,8 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 
 	// Stripe webhook (public, no auth — Stripe sends events here)
 	r.POST("/api/webhooks/stripe", paymentHandler.StripeWebhook)
+	r.POST("/api/webhooks/paypal", paymentHandler.PayPalWebhook)
+	r.POST("/api/callbacks/mpesa", paymentHandler.MPesaCallback)
 
 	// Public Stripe config (publishable key)
 	r.GET("/api/p/stripe/config", paymentHandler.StripeConfig)
