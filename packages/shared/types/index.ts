@@ -167,3 +167,37 @@ export type {
 } from "./workflow";
 export type { PremiumGuide } from "./guide";
 // grit:types
+
+
+
+export type DownloadableFile = {
+  url: string;
+  name: string;
+};
+
+export type Product = {
+  name: string;
+  images?: string[];
+  downloadable_files?: DownloadableFile[];
+};
+
+export type OrderItem = {
+  id: number | string;
+  quantity: number;
+  unit_price: number;
+  total: number;
+  product?: Product;
+};
+
+export type Order = {
+  order_number: string;
+  paid_at?: string;
+  created_at: string;
+  total: number;
+  currency: string;
+};
+
+export type PurchaseData = {
+  order: Order;
+  items: OrderItem[];
+};
