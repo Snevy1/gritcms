@@ -42,6 +42,7 @@ type Product struct {
 	Variants []ProductVariant `gorm:"foreignKey:ProductID;constraint:OnDelete:CASCADE" json:"variants,omitempty"`
 
 	SalesCount int64 `gorm:"-" json:"sales_count,omitempty"`
+	MembershipDays int `gorm:"default:0" json:"membership_days"`
 }
 
 // --- Prices ---
@@ -197,4 +198,5 @@ type Subscription struct {
 	Contact *Contact `gorm:"foreignKey:ContactID" json:"contact,omitempty"`
 	Product *Product `gorm:"foreignKey:ProductID" json:"product,omitempty"`
 	Price   *Price   `gorm:"foreignKey:PriceID" json:"price,omitempty"`
+	
 }
