@@ -254,11 +254,9 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 	r.GET("/api/p/products/:slug", publicCache, commerceHandler.GetPublicProduct)
 	r.GET("/api/coupons/validate", shortCache, commerceHandler.ValidateCoupon)
 
-	// student routes to get products
+	
 
-	// Student purchases
-    r.GET("/api/student/purchases",  commerceHandler.StudentGetPurchases)
-    r.GET("/api/student/purchases/:orderId",  commerceHandler.StudentGetPurchase)
+	
 
 	// Public community routes (cached)
 	r.GET("/api/p/community/spaces", publicCache, communityHandler.ListPublicSpaces)
