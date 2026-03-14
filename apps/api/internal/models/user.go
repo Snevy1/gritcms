@@ -109,7 +109,7 @@ func Models() []interface{} {
 		&Lesson{},
 		&CourseEnrollment{},
 		&LessonProgress{},
-		&ContactProduct{}
+		&ContactProduct{},
 		&Quiz{},
 		&QuizQuestion{},
 		&QuizAttempt{},

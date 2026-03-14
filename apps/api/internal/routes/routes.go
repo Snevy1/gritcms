@@ -254,6 +254,12 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 	r.GET("/api/p/products/:slug", publicCache, commerceHandler.GetPublicProduct)
 	r.GET("/api/coupons/validate", shortCache, commerceHandler.ValidateCoupon)
 
+	// student routes to get products
+
+	// Student purchases
+    r.GET("/api/student/purchases", authMiddleware, commerceHandler.StudentGetPurchases)
+    r.GET("/api/student/purchases/:orderId", authMiddleware, commerceHandler.StudentGetPurchase)
+
 	// Public community routes (cached)
 	r.GET("/api/p/community/spaces", publicCache, communityHandler.ListPublicSpaces)
 	r.GET("/api/p/community/spaces/:slug", shortCache, communityHandler.GetPublicSpace)
@@ -337,6 +343,8 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 			student.GET("/courses/:id", courseHandler.StudentGetCourse)
 			student.POST("/courses/:id/enroll", courseHandler.StudentEnroll)
 			student.POST("/courses/:id/lessons/:lessonId/complete", courseHandler.StudentMarkLessonComplete)
+			student.GET("/purchases", commerceHandler.StudentGetPurchases)
+            student.GET("/purchases/:orderId", commerceHandler.StudentGetPurchase)
 		}
 
 		// Community (authenticated user routes)
