@@ -229,6 +229,7 @@ func (h *PaymentHandler) Checkout(c *gin.Context) {
 	}
 
 	// Create pending order
+	productID := product.ID // capture for pointer use
 	order := models.Order{
 		TenantID:        1,
 		ContactID:       contact.ID,
@@ -244,7 +245,7 @@ func (h *PaymentHandler) Checkout(c *gin.Context) {
 		Items: []models.OrderItem{
 			{
 				TenantID:  1,
-				ProductID: product.ID,
+				ProductID: &productID, // ✅ fixed: was product.ID (uint), now &productID (*uint)
 				PriceID:   &price.ID,
 				Quantity:  1,
 				UnitPrice: price.Amount,
@@ -273,7 +274,7 @@ func (h *PaymentHandler) Checkout(c *gin.Context) {
 			AutomaticPaymentMethods: &stripe.PaymentIntentAutomaticPaymentMethodsParams{
 				Enabled: stripe.Bool(true),
 			},
-			Description: stripe.String(product.Name),
+			Description:  stripe.String(product.Name),
 			ReceiptEmail: stripe.String(u.Email),
 			Metadata: map[string]string{
 				"order_id":   fmt.Sprintf("%d", order.ID),
@@ -295,12 +296,12 @@ func (h *PaymentHandler) Checkout(c *gin.Context) {
 		h.db.Model(&order).Update("payment_id", pi.ID)
 
 		c.JSON(http.StatusOK, gin.H{"data": gin.H{
-			"provider": "stripe",
-			"client_secret":  pi.ClientSecret,
-			"order_id":       order.ID,
-			"order_number":   order.OrderNumber,
-			"amount":         amountInCents,
-			"currency":       currency,
+			"provider":        "stripe",
+			"client_secret":   pi.ClientSecret,
+			"order_id":        order.ID,
+			"order_number":    order.OrderNumber,
+			"amount":          amountInCents,
+			"currency":        currency,
 			"publishable_key": h.cfg.StripePublishableKey,
 		}})
 		return
@@ -327,10 +328,10 @@ func (h *PaymentHandler) Checkout(c *gin.Context) {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"data": gin.H{
-			"provider": "paypal",
-			"order_id": order.ID,
+			"provider":        "paypal",
+			"order_id":        order.ID,
 			"paypal_order_id": paypalOrder.ID,
-			"approval_url": approvalURL,
+			"approval_url":    approvalURL,
 		}})
 		return
 
@@ -344,7 +345,7 @@ func (h *PaymentHandler) Checkout(c *gin.Context) {
 		mpesaSvc := services.NewMPesaService(h.cfg)
 		// For STK Push, CallbackURL must be a public URL
 		callbackURL := strings.TrimRight(h.cfg.AppURL, "/") + "/api/callbacks/mpesa"
-		
+
 		checkoutRequestID, err := mpesaSvc.STKPush(input.Phone, totalAmount, order.OrderNumber, product.Name, callbackURL)
 		if err != nil {
 			log.Printf("[payment] M-Pesa STK Push failed: %v", err)
@@ -357,10 +358,10 @@ func (h *PaymentHandler) Checkout(c *gin.Context) {
 		h.db.Model(&order).Update("payment_id", checkoutRequestID)
 
 		c.JSON(http.StatusOK, gin.H{"data": gin.H{
-			"provider": "mpesa",
-			"order_id": order.ID,
+			"provider":            "mpesa",
+			"order_id":            order.ID,
 			"checkout_request_id": checkoutRequestID,
-			"message": "STK Push sent to your phone. Please enter your PIN to complete the payment.",
+			"message":             "STK Push sent to your phone. Please enter your PIN to complete the payment.",
 		}})
 		return
 
@@ -613,7 +614,6 @@ func (h *PaymentHandler) handlePaymentSucceeded(event stripe.Event) {
 	h.db.Save(&order)
 
 	// Fulfill order (auto-enroll in courses, etc.)
-	// Import the fulfillment service
 	fulfillOrder(h.db, &order)
 
 	log.Printf("[webhook] Order %d marked as paid (PI: %s)", order.ID, pi)
